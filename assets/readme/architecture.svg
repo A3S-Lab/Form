@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-labelledby="title desc">
-  <title id="title">A3S Form target architecture</title>
+  <title id="title">A3S Form runtime architecture</title>
   <desc id="desc">People and AI agents use a controlled Designer to create a canonical Form Document. A deterministic compiler validates and transforms it into a Form Plan consumed by framework adapters. Trusted host registries provide widgets, data sources, actions, and validators while the host retains identity, persistence, submission, and side effects. A3S Workflow and A3S Cloud embed the same surfaces.</desc>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1200" y2="640" gradientUnits="userSpaceOnUse">
