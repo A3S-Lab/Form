@@ -1,0 +1,128 @@
+suite "a3s-form-designer" {
+    version = 1
+
+    scenario "design-preview-submit" {
+        name = "中文表单从设计到提交"
+        surface = "web"
+        timeout_ms = 60000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4176/"
+        }
+
+        viewport "desktop" {
+            width = 1440
+            height = 1100
+        }
+
+        wait "ready" {
+            text = "AI 原生表单设计器"
+        }
+
+        expect "designer-ready" {
+            text = "● 编译通过"
+        }
+
+        click "add-number" {
+            target = role("button", "添加数字字段")
+        }
+
+        fill "rename-number" {
+            target = css("[aria-label='字段标题']")
+            value = "工龄"
+        }
+
+        check "require-number" {
+            target = css(".a3s-form-toggle input[type='checkbox']")
+        }
+
+        click "select-start-date" {
+            target = role("treeitem", "选择入职日期")
+        }
+
+        uncheck "optional-start-date" {
+            target = css(".a3s-form-toggle input[type='checkbox']")
+        }
+
+        expect "field-updated" {
+            text = "工龄"
+        }
+
+        click "preview" {
+            target = role("button", "预览")
+        }
+
+        expect "preview-updated" {
+            text = "工龄"
+        }
+
+        click "submit-empty" {
+            target = css(".a3s-form-renderer button[type='submit']")
+        }
+
+        expect "required-validation" {
+            text = "此项为必填项。"
+        }
+
+        fill "name" {
+            target = css("[id$='-name']")
+            value = "张三"
+        }
+
+        fill "invalid-email" {
+            target = css("[id$='-email']")
+            value = "invalid-email"
+        }
+
+        select "department" {
+            target = css("[id$='-department']")
+            values = ["engineering"]
+        }
+
+        fill "years" {
+            target = css("[id$='-field-1']")
+            value = "3"
+        }
+
+        click "submit-invalid-email" {
+            target = css(".a3s-form-renderer button[type='submit']")
+        }
+
+        expect "email-validation" {
+            text = "请输入有效的电子邮箱。"
+        }
+
+        fill "valid-email" {
+            target = css("[id$='-email']")
+            value = "zhangsan@example.com"
+        }
+
+        click "submit-valid" {
+            target = css(".a3s-form-renderer button[type='submit']")
+        }
+
+        expect "submitted" {
+            text = "申请已提交，正在等待审批。"
+        }
+
+        click "save-draft" {
+            target = role("button", "保存草稿")
+        }
+
+        expect "draft-saved" {
+            text = "草稿已保存。"
+        }
+
+        click "design" {
+            target = role("button", "设计")
+        }
+
+        click "save-document" {
+            target = role("button", "保存表单")
+        }
+
+        expect "document-saved" {
+            text = "已保存"
+        }
+    }
+}
