@@ -28,6 +28,73 @@ const plan = assertCompiled(document);
 
 `FormDesigner` 和 `FormRenderer` 都是受控接口。宿主应保存新文档/值，不要依赖组件内部状态作为业务事实源。
 
+### 自定义表单节点
+
+`FormNodeRegistry` 把一个业务节点的组件目录、默认 Schema、设计态渲染、专属配置面板和运行态渲染收敛为同一份注册定义。文档只保存 registry key 与 JSON 配置，不保存或执行任意 JavaScript。
+
+```tsx
+import {
+  defineFormNodeRegistry,
+  type FormNodeDesignProps,
+  type FormNodeInspectorProps,
+  type FormNodeRenderProps,
+} from '@a3s-lab/form/react';
+
+const nodeRegistry = defineFormNodeRegistry({
+  'company.rating': {
+    kind: 'field',
+    catalog: {
+      section: 'business',
+      sectionLabel: '业务组件',
+      label: '评分',
+      description: '采集满意度评分',
+      glyph: '★',
+    },
+    schema: { type: 'number', minimum: 1, maximum: 5 },
+    defaults: { width: 6, customProps: { maximum: 5 } },
+    design: RatingDesign,
+    inspector: RatingInspector,
+    render: RatingNode,
+  },
+});
+
+function RatingDesign({ node }: FormNodeDesignProps) {
+  return <div>{node.label} · ☆☆☆☆☆</div>;
+}
+
+function RatingInspector({ node, onUpdate }: FormNodeInspectorProps) {
+  return (
+    <input
+      value={Number(node.customProps?.maximum ?? 5)}
+      onChange={(event) => {
+        const maximum = Number(event.target.value);
+        onUpdate({
+          node: { customProps: { maximum } },
+          schema: { maximum },
+        });
+      }}
+    />
+  );
+}
+
+function RatingNode({ node, value, onChange }: FormNodeRenderProps) {
+  return (
+    <button type="button" onClick={() => onChange(5)}>
+      {node.label}：{String(value ?? 0)} 星
+    </button>
+  );
+}
+
+const plan = assertCompiled(document, {
+  capabilities: { widgets: Object.keys(nodeRegistry) },
+});
+
+<FormDesigner document={document} onChange={setDocument} nodeRegistry={nodeRegistry} />;
+<FormRenderer plan={plan} value={value} onChange={setValue} nodeRegistry={nodeRegistry} />;
+```
+
+`field` 与 `repeater` 类型的自定义节点会创建 Schema 绑定；`content` 用于无值展示节点；`group` 与 `section` 可继续接收子节点和跨容器拖放。配置同时影响节点与 Schema 时，应使用原子 `onUpdate({ node, schema })`；单侧更新仍可使用 `onUpdateNode` 或 `onUpdateSchema`。未在能力列表中声明的 registry key 会被编译器拒绝。
+
 ## Vue 3
 
 ```vue

@@ -11,13 +11,17 @@ export interface WorkerCompileOptions extends CompileOptions {
   workerFactory: () => Worker;
 }
 
+export function createWorkerRequestId(randomUUID?: () => string): string {
+  return randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+}
+
 export function compileFormInWorker(
   document: FormDocument,
   options: WorkerCompileOptions,
 ): Promise<CompileResult> {
   const { signal, workerFactory, ...compileOptions } = options;
   const worker = workerFactory();
-  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  const id = createWorkerRequestId(globalThis.crypto?.randomUUID?.bind(globalThis.crypto));
   return new Promise((resolve, reject) => {
     const cleanup = () => {
       signal?.removeEventListener('abort', abort);

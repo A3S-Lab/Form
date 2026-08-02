@@ -66,6 +66,7 @@ export interface UiNode {
   presentation?: UiPresentation;
   gap?: 0 | 8 | 12 | 16 | 24 | 32;
   options?: UiOption[];
+  customProps?: JsonObject;
   dataSource?: string;
   readOnly?: boolean;
   hidden?: boolean;

@@ -83,6 +83,8 @@ for _ in {1..30}; do
 done
 
 if ((ready == 0)); then
+  kill "$server_pid" >/dev/null 2>&1 || true
+  wait "$server_pid" >/dev/null 2>&1 || true
   echo "体验站未能启动，请查看 $runtime_root/playground.err.log" >&2
   exit 1
 fi

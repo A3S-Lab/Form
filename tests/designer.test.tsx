@@ -38,6 +38,20 @@ function dragTransfer(): DataTransfer {
 }
 
 describe('React FormDesigner', () => {
+  it('filters the component catalog and recovers from an empty search', () => {
+    render(<DesignerHarness />);
+    const search = screen.getByLabelText('搜索组件');
+
+    fireEvent.change(search, { target: { value: '日期' } });
+    expect(screen.getByRole('button', { name: '添加日期字段' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '添加邮箱字段' })).toBeNull();
+
+    fireEvent.change(search, { target: { value: '不存在的组件' } });
+    expect(screen.getByText('没有匹配的组件')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '清空组件搜索' }));
+    expect(screen.getByRole('button', { name: '添加邮箱字段' })).toBeTruthy();
+  });
+
   it('adds, configures, previews, deletes and restores fields in Chinese', () => {
     render(<DesignerHarness />);
     expect(screen.getByTestId('form-designer')).toBeTruthy();
@@ -45,6 +59,7 @@ describe('React FormDesigner', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /单行文本/ }));
     expect(screen.getByTestId('designer-document').textContent).toContain('field-1');
+    expect(screen.getByLabelText('字段组件').closest('.a3s-form-select-control')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('字段标题'), { target: { value: '联系电话' } });
     fireEvent.change(screen.getByLabelText('字段组件'), { target: { value: 'textarea' } });
     fireEvent.change(screen.getByLabelText('字段说明'), { target: { value: '请留下联系方式' } });

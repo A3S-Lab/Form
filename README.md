@@ -70,8 +70,8 @@ cd Form
 
 | 产品面 | 已实现能力 |
 | --- | --- |
-| **Form Designer** | 中文字段库、结构树、属性表单、12 栏配置、实时预览、撤销/重做、编译诊断、AI 补丁审阅 |
-| **Form Renderer** | 受控值、字段校验、显隐/启用规则、数据源选项、动作回调、只读与外部错误、自定义 widget、重复项 |
+| **Form Designer** | A3S Office 组件样式、中文字段库、结构树、栅格/分栏/标签页/折叠布局、跨容器拖放、自定义节点、实时预览、撤销/重做与编译诊断 |
+| **Form Renderer** | 受控值、字段校验、显隐/启用规则、数据源选项、动作回调、只读与外部错误、自定义节点与重复项 |
 | **Form Compiler** | 输入边界、语义校验、依赖环检测、能力检查、canonical SHA-256、不可变 `FormPlan`、可取消 Worker |
 | **Agent Interface** | JSON CLI、revision-bound `FormPatch`、`$a3s-form` Skill、机器可读诊断和原子修改 |
 
@@ -172,9 +172,9 @@ digest          canonical SHA-256
 | `@a3s-lab/form/cloud` | A3S Cloud host adapter |
 | `@a3s-lab/form/workflow` | FormRef、交互请求与提交校验 |
 | `@a3s-lab/form/compiler.worker.js` | 可取消浏览器编译 Worker |
-| `@a3s-lab/form/styles.css` | A3S Web 风格共享样式 |
+| `@a3s-lab/form/styles.css` | 与 A3S Office 同源 token、控件密度和交互状态的共享样式 |
 
-更多代码示例见 [集成指南](docs/integration.md)。
+自定义节点注册、React/Vue/Web Component 与宿主适配示例见 [集成指南](docs/integration.md)。
 
 <a id="agent"></a>
 

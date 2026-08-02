@@ -1,6 +1,7 @@
 import { fireEvent, waitFor } from '@testing-library/react';
 import { createApp, h, nextTick, ref as vueRef } from 'vue';
 import { assertCompiled, compileForm, type FormDocument, type JsonObject } from '../src/core';
+import type { FormWidgetRegistry } from '../src/react';
 import { A3SFormDesigner, A3SFormRenderer } from '../src/vue';
 import {
   type A3SFormDesignerElement,
@@ -16,6 +17,7 @@ describe('framework adapters', () => {
     const plan = assertCompiled(createDocument());
     const value = vueRef<JsonObject>({ name: '张三' });
     const readOnly = vueRef(false);
+    const widgetRegistry = vueRef<FormWidgetRegistry>();
     let action: { actionId: string; value: JsonObject } | undefined;
     const app = createApp({
       setup: () => () =>
@@ -23,6 +25,7 @@ describe('framework adapters', () => {
           plan,
           modelValue: value.value,
           readOnly: readOnly.value,
+          widgetRegistry: widgetRegistry.value,
           'onUpdate:modelValue': (next: JsonObject) => {
             value.value = next;
           },
@@ -48,6 +51,7 @@ describe('framework adapters', () => {
     fireEvent.click(container.querySelector('button[type="submit"]') as HTMLButtonElement);
     await waitFor(() => expect(action).toEqual({ actionId: 'submit', value: { name: '李小明' } }));
     readOnly.value = true;
+    widgetRegistry.value = {};
     await nextTick();
     await waitFor(() =>
       expect((container.querySelector('input[id*="name"]') as HTMLInputElement).disabled).toBe(
@@ -63,11 +67,13 @@ describe('framework adapters', () => {
     document.body.append(container);
     const source = compileForm(createDocument()).document as FormDocument;
     const current = vueRef(source);
+    const widgetRegistry = vueRef<FormWidgetRegistry>();
     let previewValue: JsonObject | undefined;
     const app = createApp({
       setup: () => () =>
         h(A3SFormDesigner as never, {
           document: current.value,
+          widgetRegistry: widgetRegistry.value,
           'onUpdate:document': (next: FormDocument) => {
             current.value = next;
           },
@@ -78,6 +84,8 @@ describe('framework adapters', () => {
     });
     app.mount(container);
     await waitFor(() => expect(container.querySelector('[aria-label="字段标题"]')).toBeTruthy());
+    widgetRegistry.value = {};
+    await nextTick();
     fireEvent.change(container.querySelector('[aria-label="字段标题"]') as HTMLInputElement, {
       target: { value: '真实姓名' },
     });

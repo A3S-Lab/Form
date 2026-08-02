@@ -1,6 +1,7 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import {
   applyFormPatch,
+  type CompileOptions,
   compileForm,
   type FormDocument,
   type FormPatch,
@@ -11,17 +12,22 @@ import {
 } from '../core';
 import { type CanvasDropTarget, catalogDragType, DesignerCanvas } from './designer-canvas';
 import {
-  DESIGNER_CATALOG,
+  createDesignerCatalog,
   type DesignerCatalogItem,
-  FIELD_WIDGETS,
+  type DesignerCatalogSection,
+  fieldWidgets,
   findCatalogItem,
 } from './designer-catalog';
+import type { FormNodeRegistry } from './node-registry';
 import { FormRenderer, type FormRendererProps, type FormWidgetRegistry } from './renderer';
+import { SelectControl } from './select-control';
 
 export interface FormDesignerProps {
   document: FormDocument;
   onChange: (document: FormDocument) => void;
   widgetRegistry?: FormWidgetRegistry;
+  nodeRegistry?: FormNodeRegistry;
+  compileOptions?: CompileOptions;
   value?: JsonObject;
   onValueChange?: (value: JsonObject) => void;
   onAction?: FormRendererProps['onAction'];
@@ -69,12 +75,13 @@ function insertionContainer(document: FormDocument, selectedId: string): UiNode 
 function compileMutation(
   document: FormDocument,
   mutate: (draft: FormDocument) => void,
+  options?: CompileOptions,
 ): FormDocument | undefined {
   const draft = structuredClone(document);
   mutate(draft);
   draft.revision += 1;
   delete draft.digest;
-  const result = compileForm(draft);
+  const result = compileForm(draft, options);
   return result.ok ? result.document : undefined;
 }
 
@@ -100,7 +107,23 @@ function propertyFromNode(node: UiNode | undefined): string | undefined {
 
 export function FormDesigner(props: FormDesignerProps) {
   const { document, onChange } = props;
-  const compiled = useMemo(() => compileForm(document), [document]);
+  const compileOptions = useMemo<CompileOptions>(() => {
+    const configuredWidgets = Array.from(props.compileOptions?.capabilities?.widgets ?? []);
+    return {
+      ...props.compileOptions,
+      capabilities: {
+        ...props.compileOptions?.capabilities,
+        widgets: [
+          ...configuredWidgets,
+          ...Object.keys(props.widgetRegistry ?? {}),
+          ...Object.keys(props.nodeRegistry ?? {}),
+        ],
+      },
+    };
+  }, [props.compileOptions, props.nodeRegistry, props.widgetRegistry]);
+  const compiled = useMemo(() => compileForm(document, compileOptions), [compileOptions, document]);
+  const catalog = useMemo(() => createDesignerCatalog(props.nodeRegistry), [props.nodeRegistry]);
+  const availableFieldWidgets = useMemo(() => fieldWidgets(catalog), [catalog]);
   const [selectedId, setSelectedId] = useState(
     () =>
       (document.ui.nodes.some((node) => node.id === document.ui.root)
@@ -122,6 +145,8 @@ export function FormDesigner(props: FormDesignerProps) {
   const selectedSchema = selectedProperty
     ? document.schema.properties?.[selectedProperty]
     : undefined;
+  const mutateDocument = (mutate: (draft: FormDocument) => void) =>
+    compileMutation(document, mutate, compileOptions);
 
   const commit = (next: FormDocument | undefined, nextSelectedId?: string) => {
     if (!next) return;
@@ -133,12 +158,40 @@ export function FormDesigner(props: FormDesignerProps) {
 
   const addCatalogItem = (item: DesignerCatalogItem, target?: CanvasDropTarget) => {
     const existingIds = new Set(document.ui.nodes.map((node) => node.id));
-    const prefix = item.kind === 'field' || item.kind === 'repeater' ? 'field' : item.kind;
+    const prefix = item.extensionKey
+      ? 'custom'
+      : item.kind === 'field' || item.kind === 'repeater'
+        ? 'field'
+        : item.kind;
     const nodeId = allocateId(existingIds, prefix);
     const property = nodeId.replaceAll('-', '_');
-    const next = compileMutation(document, (draft) => {
+    const next = mutateDocument((draft) => {
       const nodes: UiNode[] = [];
-      if (item.kind === 'field' || item.kind === 'repeater') {
+      if (item.extensionKey) {
+        const defaults = structuredClone(item.defaults ?? {});
+        const bindsValue = item.kind === 'field' || item.kind === 'repeater';
+        if (bindsValue) {
+          draft.schema.type = 'object';
+          draft.schema.properties ??= {};
+          draft.schema.properties[property] = {
+            ...structuredClone(item.schema ?? {}),
+            title: item.label,
+          };
+        }
+        nodes.push({
+          ...defaults,
+          id: nodeId,
+          kind: item.kind,
+          label: item.label,
+          schemaPath: bindsValue ? `/properties/${property}` : undefined,
+          widget: item.extensionKey,
+          children:
+            item.kind === 'section' || item.kind === 'group'
+              ? (defaults.children ?? [])
+              : defaults.children,
+          width: defaults.width ?? 12,
+        });
+      } else if (item.kind === 'field' || item.kind === 'repeater') {
         draft.schema.type = 'object';
         draft.schema.properties ??= {};
         draft.schema.properties[property] = {
@@ -235,7 +288,7 @@ export function FormDesigner(props: FormDesignerProps) {
 
   const updateSelected = (changes: Partial<UiNode>) => {
     commit(
-      compileMutation(document, (draft) => {
+      mutateDocument((draft) => {
         const index = draft.ui.nodes.findIndex((node) => node.id === selectedId);
         if (index >= 0) draft.ui.nodes[index] = { ...draft.ui.nodes[index], ...changes };
       }),
@@ -244,7 +297,7 @@ export function FormDesigner(props: FormDesignerProps) {
 
   const updateMetadata = (changes: Partial<FormDocument['metadata']>) => {
     commit(
-      compileMutation(document, (draft) => {
+      mutateDocument((draft) => {
         draft.metadata = { ...draft.metadata, ...changes };
       }),
     );
@@ -253,7 +306,7 @@ export function FormDesigner(props: FormDesignerProps) {
   const updateSchema = (changes: Partial<JsonSchema>) => {
     if (!selectedProperty) return;
     commit(
-      compileMutation(document, (draft) => {
+      mutateDocument((draft) => {
         const properties = draft.schema.properties;
         const schema = properties?.[selectedProperty];
         if (properties && schema) properties[selectedProperty] = { ...schema, ...changes };
@@ -261,10 +314,29 @@ export function FormDesigner(props: FormDesignerProps) {
     );
   };
 
+  const updateCustomNode = (changes: { node?: Partial<UiNode>; schema?: Partial<JsonSchema> }) => {
+    if (!changes.node && !changes.schema) return;
+    commit(
+      mutateDocument((draft) => {
+        if (changes.node) {
+          const index = draft.ui.nodes.findIndex((node) => node.id === selectedId);
+          if (index >= 0) draft.ui.nodes[index] = { ...draft.ui.nodes[index], ...changes.node };
+        }
+        if (changes.schema && selectedProperty) {
+          const properties = draft.schema.properties;
+          const schema = properties?.[selectedProperty];
+          if (properties && schema) {
+            properties[selectedProperty] = { ...schema, ...changes.schema };
+          }
+        }
+      }),
+    );
+  };
+
   const setRequired = (required: boolean) => {
     if (!selectedProperty) return;
     commit(
-      compileMutation(document, (draft) => {
+      mutateDocument((draft) => {
         const requirements = new Set(draft.schema.required ?? []);
         if (required) requirements.add(selectedProperty);
         else requirements.delete(selectedProperty);
@@ -280,7 +352,7 @@ export function FormDesigner(props: FormDesignerProps) {
       .filter(Boolean);
     const options = labels.map((label, index) => ({ label, value: `option-${index + 1}` }));
     commit(
-      compileMutation(document, (draft) => {
+      mutateDocument((draft) => {
         const node = draft.ui.nodes.find((candidate) => candidate.id === selectedId);
         if (node) node.options = options;
         if (selectedProperty && draft.schema.properties?.[selectedProperty]) {
@@ -300,7 +372,7 @@ export function FormDesigner(props: FormDesignerProps) {
       return;
     const parentId = currentParent?.id ?? document.ui.root;
     const removed = collectDescendants(document, selected.id);
-    const next = compileMutation(document, (draft) => {
+    const next = mutateDocument((draft) => {
       draft.ui.nodes = draft.ui.nodes
         .filter((node) => !removed.has(node.id))
         .map((node) => ({ ...node, children: node.children?.filter((id) => !removed.has(id)) }));
@@ -332,7 +404,7 @@ export function FormDesigner(props: FormDesignerProps) {
     }
     const nodeId = idMap.get(selected.id);
     if (!nodeId) return;
-    const next = compileMutation(document, (draft) => {
+    const next = mutateDocument((draft) => {
       draft.schema.properties ??= {};
       const existingProperties = new Set(Object.keys(draft.schema.properties));
       const clones: UiNode[] = [];
@@ -378,7 +450,7 @@ export function FormDesigner(props: FormDesignerProps) {
     const prefix = selected.layout === 'tabs' ? 'tab' : 'panel';
     const nodeId = nextId(document, prefix);
     const itemNumber = (selected.children?.length ?? 0) + 1;
-    const next = compileMutation(document, (draft) => {
+    const next = mutateDocument((draft) => {
       const container = draft.ui.nodes.find((node) => node.id === selected.id);
       if (!container) return;
       container.children ??= [];
@@ -400,7 +472,7 @@ export function FormDesigner(props: FormDesignerProps) {
   const moveSelected = (direction: -1 | 1) => {
     if (!selected) return;
     commit(
-      compileMutation(document, (draft) => {
+      mutateDocument((draft) => {
         const parent = findParent(draft, selected.id);
         const index = parent?.children?.indexOf(selected.id) ?? -1;
         const target = index + direction;
@@ -421,7 +493,7 @@ export function FormDesigner(props: FormDesignerProps) {
     const sourceParent = findParent(document, nodeId);
     const sourceIndex = sourceParent?.children?.indexOf(nodeId) ?? -1;
     commit(
-      compileMutation(document, (draft) => {
+      mutateDocument((draft) => {
         const container = draft.ui.nodes.find((node) => node.id === target.containerId);
         if (!isContainer(container)) return;
         for (const node of draft.ui.nodes)
@@ -454,7 +526,7 @@ export function FormDesigner(props: FormDesignerProps) {
   const reviewPatch = () => {
     try {
       const patch = JSON.parse(patchText) as FormPatch;
-      const result = applyFormPatch(document, patch);
+      const result = applyFormPatch(document, patch, compileOptions);
       if (result.ok) {
         commit(result.document);
         setPatchMessage(
@@ -487,6 +559,7 @@ export function FormDesigner(props: FormDesignerProps) {
       <div className="a3s-form-designer-main">
         <PalettePanel
           document={document}
+          catalog={catalog}
           selectedId={selectedId}
           panel={leftPanel}
           onPanelChange={setLeftPanel}
@@ -498,8 +571,16 @@ export function FormDesigner(props: FormDesignerProps) {
         />
         <main className="a3s-form-canvas" data-testid="designer-canvas">
           <div className="a3s-form-canvas-meta">
-            <span>{mode === 'design' ? '表单画布' : '交互预览'}</span>
-            <span className={compiled.ok ? 'is-ok' : 'is-error'}>
+            <span className="a3s-form-canvas-context">
+              <strong>{mode === 'design' ? '表单画布' : '交互预览'}</strong>
+              <small>
+                {mode === 'design' ? '点击组件编辑，拖拽调整位置' : '正在使用真实交互与校验规则'}
+              </small>
+            </span>
+            <span
+              className={`a3s-form-status-badge ${compiled.ok ? 'success is-ok' : 'danger is-error'}`}
+              aria-live="polite"
+            >
               {compiled.ok ? '● 编译通过' : `● ${compiled.diagnostics.length} 个问题`}
             </span>
           </div>
@@ -515,6 +596,7 @@ export function FormDesigner(props: FormDesignerProps) {
                 readOnly={props.readOnly}
                 locale={props.locale}
                 widgetRegistry={props.widgetRegistry}
+                nodeRegistry={props.nodeRegistry}
               />
             </div>
           ) : (
@@ -522,12 +604,13 @@ export function FormDesigner(props: FormDesignerProps) {
               document={document}
               selectedId={selectedId}
               viewport={viewport}
+              nodeRegistry={props.nodeRegistry}
               onSelect={(id) => {
                 setSelectedId(id);
                 setInspectorPanel('properties');
               }}
               onCatalogDrop={(catalogId, containerId) => {
-                const item = findCatalogItem(catalogId);
+                const item = findCatalogItem(catalogId, catalog);
                 if (item) addCatalogItem(item, containerId);
               }}
               onNodeDrop={moveNodeToContainer}
@@ -552,6 +635,8 @@ export function FormDesigner(props: FormDesignerProps) {
           selected={selected}
           selectedProperty={selectedProperty}
           selectedSchema={selectedSchema}
+          availableFieldWidgets={availableFieldWidgets}
+          nodeRegistry={props.nodeRegistry}
           panel={inspectorPanel}
           patchText={patchText}
           patchMessage={patchMessage}
@@ -559,6 +644,7 @@ export function FormDesigner(props: FormDesignerProps) {
           onUpdateNode={updateSelected}
           onUpdateMetadata={updateMetadata}
           onUpdateSchema={updateSchema}
+          onUpdateCustomNode={updateCustomNode}
           onSetRequired={setRequired}
           onUpdateOptions={updateOptions}
           onAddLayoutItem={addLayoutItem}
@@ -596,14 +682,30 @@ function DesignerToolbar({
   return (
     <header className="a3s-form-designer-toolbar">
       <div className="a3s-form-toolbar-title">
-        <strong>表单设计</strong>
-        <span>{compiled ? '更改已同步' : '需要修复'}</span>
+        <span className="a3s-form-toolbar-copy">
+          <strong>表单内容</strong>
+          <small>{compiled ? '结构与规则实时生效' : '处理问题后即可预览'}</small>
+        </span>
       </div>
       <div className="a3s-form-toolbar-actions">
-        <button type="button" onClick={onUndo} disabled={!canUndo} aria-label="撤销" title="撤销">
+        <button
+          type="button"
+          className="a3s-form-icon-button"
+          onClick={onUndo}
+          disabled={!canUndo}
+          aria-label="撤销"
+          title="撤销"
+        >
           ↶
         </button>
-        <button type="button" onClick={onRedo} disabled={!canRedo} aria-label="重做" title="重做">
+        <button
+          type="button"
+          className="a3s-form-icon-button"
+          onClick={onRedo}
+          disabled={!canRedo}
+          aria-label="重做"
+          title="重做"
+        >
           ↷
         </button>
         <span className="a3s-form-toolbar-divider" />
@@ -614,6 +716,7 @@ function DesignerToolbar({
             aria-pressed={viewport === 'desktop'}
             onClick={() => onViewportChange('desktop')}
           >
+            <span className="is-desktop" aria-hidden="true" />
             桌面
           </button>
           <button
@@ -622,6 +725,7 @@ function DesignerToolbar({
             aria-pressed={viewport === 'mobile'}
             onClick={() => onViewportChange('mobile')}
           >
+            <span className="is-mobile" aria-hidden="true" />
             移动
           </button>
         </fieldset>
@@ -632,6 +736,7 @@ function DesignerToolbar({
             aria-pressed={mode === 'design'}
             onClick={() => onModeChange('design')}
           >
+            <span className="is-design" aria-hidden="true" />
             设计
           </button>
           <button
@@ -640,6 +745,7 @@ function DesignerToolbar({
             aria-pressed={mode === 'preview'}
             onClick={() => onModeChange('preview')}
           >
+            <span className="is-preview" aria-hidden="true" />
             预览
           </button>
         </fieldset>
@@ -650,6 +756,7 @@ function DesignerToolbar({
 
 function PalettePanel({
   document,
+  catalog,
   selectedId,
   panel,
   onPanelChange,
@@ -657,12 +764,27 @@ function PalettePanel({
   onSelect,
 }: {
   document: FormDocument;
+  catalog: readonly DesignerCatalogSection[];
   selectedId: string;
   panel: LeftPanel;
   onPanelChange: (panel: LeftPanel) => void;
   onAdd: (item: DesignerCatalogItem) => void;
   onSelect: (id: string) => void;
 }) {
+  const [query, setQuery] = useState('');
+  const visibleCatalog = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase('zh-CN');
+    if (!normalized) return catalog;
+    return catalog
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          `${item.label} ${item.description}`.toLocaleLowerCase('zh-CN').includes(normalized),
+        ),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [catalog, query]);
+
   return (
     <aside className="a3s-form-palette" aria-label="组件与表单结构">
       <fieldset className="a3s-form-panel-tabs" aria-label="左侧面板">
@@ -682,55 +804,87 @@ function PalettePanel({
         </button>
       </fieldset>
       {panel === 'components' ? (
-        <div className="a3s-form-catalog">
-          {DESIGNER_CATALOG.map((section) => (
-            <section key={section.id}>
-              <h2>{section.label}</h2>
-              <div className="a3s-form-palette-grid">
-                {section.items.map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    title={item.description}
-                    aria-label={`添加${item.label}${item.kind === 'field' || item.kind === 'repeater' ? '字段' : ''}`}
-                    draggable
-                    onDragStart={(event) => event.dataTransfer.setData(catalogDragType, item.id)}
-                    onClick={() => onAdd(item)}
-                  >
-                    <span className="a3s-form-palette-icon" aria-hidden="true">
-                      {item.glyph}
-                    </span>
-                    <span>
-                      <strong>{item.label}</strong>
-                      <small>{item.description}</small>
-                    </span>
-                  </button>
-                ))}
+        <div className="a3s-form-palette-content">
+          <label className="a3s-form-catalog-search">
+            <span aria-hidden="true">⌕</span>
+            <input
+              aria-label="搜索组件"
+              placeholder="搜索字段或布局"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            {query && (
+              <button type="button" aria-label="清空组件搜索" onClick={() => setQuery('')}>
+                ×
+              </button>
+            )}
+          </label>
+          <div className="a3s-form-catalog">
+            {visibleCatalog.map((section) => (
+              <section key={section.id}>
+                <h2>
+                  {section.label}
+                  <span aria-hidden="true">{section.items.length}</span>
+                </h2>
+                <div className="a3s-form-palette-grid">
+                  {section.items.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      title={item.description}
+                      aria-label={`添加${item.label}${item.kind === 'field' || item.kind === 'repeater' ? '字段' : ''}`}
+                      draggable
+                      onDragStart={(event) => event.dataTransfer.setData(catalogDragType, item.id)}
+                      onClick={() => onAdd(item)}
+                    >
+                      <span className="a3s-form-palette-icon" aria-hidden="true">
+                        {item.glyph}
+                      </span>
+                      <span>
+                        <strong>{item.label}</strong>
+                        <small>{item.description}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
+            {visibleCatalog.length === 0 && (
+              <div className="a3s-form-catalog-empty">
+                <span aria-hidden="true">⌕</span>
+                <strong>没有匹配的组件</strong>
+                <small>试试“文本”“日期”或“布局”</small>
               </div>
-            </section>
-          ))}
+            )}
+          </div>
         </div>
       ) : (
-        <div className="a3s-form-outline" role="tree">
-          {document.ui.nodes.map((node) => (
-            <button
-              type="button"
-              role="treeitem"
-              aria-label={`选择${node.label ?? node.id}`}
-              aria-selected={selectedId === node.id}
-              data-node-id={node.id}
-              className={selectedId === node.id ? 'is-selected' : ''}
-              style={{ paddingLeft: `${12 + nodeDepth(document, node.id) * 13}px` }}
-              key={node.id}
-              onClick={() => onSelect(node.id)}
-            >
-              <span aria-hidden="true">
-                {node.kind === 'field' || node.kind === 'repeater' ? '◇' : '▣'}
-              </span>
-              <span>{node.label ?? node.id}</span>
-              <small>{node.kind}</small>
-            </button>
-          ))}
+        <div className="a3s-form-outline-panel">
+          <div className="a3s-form-outline-summary">
+            <span>页面结构</span>
+            <strong>{document.ui.nodes.length} 个节点</strong>
+          </div>
+          <div className="a3s-form-outline" role="tree">
+            {document.ui.nodes.map((node) => (
+              <button
+                type="button"
+                role="treeitem"
+                aria-label={`选择${node.label ?? node.id}`}
+                aria-selected={selectedId === node.id}
+                data-node-id={node.id}
+                className={selectedId === node.id ? 'is-selected' : ''}
+                style={{ paddingLeft: `${12 + nodeDepth(document, node.id) * 13}px` }}
+                key={node.id}
+                onClick={() => onSelect(node.id)}
+              >
+                <span aria-hidden="true">
+                  {node.kind === 'field' || node.kind === 'repeater' ? '◇' : '▣'}
+                </span>
+                <span>{node.label ?? node.id}</span>
+                <small>{node.kind}</small>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </aside>
@@ -742,6 +896,8 @@ function Inspector(props: {
   selected: UiNode | undefined;
   selectedProperty: string | undefined;
   selectedSchema: JsonSchema | undefined;
+  availableFieldWidgets: readonly { label: string; value: string }[];
+  nodeRegistry?: FormNodeRegistry;
   panel: InspectorPanel;
   patchText: string;
   patchMessage: string;
@@ -749,6 +905,7 @@ function Inspector(props: {
   onUpdateNode: (changes: Partial<UiNode>) => void;
   onUpdateMetadata: (changes: Partial<FormDocument['metadata']>) => void;
   onUpdateSchema: (changes: Partial<JsonSchema>) => void;
+  onUpdateCustomNode: (changes: { node?: Partial<UiNode>; schema?: Partial<JsonSchema> }) => void;
   onSetRequired: (required: boolean) => void;
   onUpdateOptions: (text: string) => void;
   onAddLayoutItem: () => void;
@@ -814,6 +971,9 @@ function Inspector(props: {
 
 function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: UiNode }) {
   const { selected } = props;
+  const CustomInspector = selected.widget
+    ? props.nodeRegistry?.[selected.widget]?.inspector
+    : undefined;
   if (selected.kind === 'root') {
     return (
       <div className="a3s-form-inspector-fields">
@@ -832,7 +992,7 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
           />
         </Control>
         <Control label="画布栏数">
-          <select
+          <SelectControl
             aria-label="画布栏数"
             value={selected.columns ?? 12}
             onChange={(event) =>
@@ -844,10 +1004,10 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
                 {columns} 栏
               </option>
             ))}
-          </select>
+          </SelectControl>
         </Control>
         <Control label="字段间距">
-          <select
+          <SelectControl
             aria-label="画布间距"
             value={selected.gap ?? 16}
             onChange={(event) =>
@@ -859,7 +1019,7 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
                 {gap}px
               </option>
             ))}
-          </select>
+          </SelectControl>
         </Control>
       </div>
     );
@@ -875,17 +1035,17 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
       </Control>
       {selected.kind === 'field' && (
         <Control label="组件">
-          <select
+          <SelectControl
             aria-label="字段组件"
             value={selected.widget ?? 'text'}
             onChange={(event) => props.onUpdateNode({ widget: event.target.value })}
           >
-            {FIELD_WIDGETS.map((item) => (
+            {props.availableFieldWidgets.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </Control>
       )}
       {(selected.kind === 'field' || selected.kind === 'repeater') && (
@@ -919,7 +1079,7 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
         </Control>
       )}
       <Control label="栅格宽度">
-        <select
+        <SelectControl
           aria-label="栅格宽度"
           value={selected.width ?? 12}
           onChange={(event) =>
@@ -931,12 +1091,12 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
               {width} / 12
             </option>
           ))}
-        </select>
+        </SelectControl>
       </Control>
       {(selected.kind === 'section' || selected.kind === 'group') && (
         <>
           <Control label="内部栏数">
-            <select
+            <SelectControl
               aria-label="内部栏数"
               value={selected.columns ?? 12}
               onChange={(event) =>
@@ -948,10 +1108,10 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
                   {columns} 栏
                 </option>
               ))}
-            </select>
+            </SelectControl>
           </Control>
           <Control label="内部间距">
-            <select
+            <SelectControl
               aria-label="内部间距"
               value={selected.gap ?? 16}
               onChange={(event) =>
@@ -963,13 +1123,13 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
                   {gap}px
                 </option>
               ))}
-            </select>
+            </SelectControl>
           </Control>
         </>
       )}
       {selected.kind === 'content' && selected.presentation === 'spacer' && (
         <Control label="间距高度">
-          <select
+          <SelectControl
             aria-label="间距高度"
             value={selected.gap ?? 24}
             onChange={(event) =>
@@ -981,7 +1141,7 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
                 {gap}px
               </option>
             ))}
-          </select>
+          </SelectControl>
         </Control>
       )}
       {(selected.layout === 'tabs' || selected.layout === 'collapse') && (
@@ -997,6 +1157,17 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
             onChange={(event) => props.onUpdateOptions(event.target.value)}
           />
         </Control>
+      )}
+      {CustomInspector && (
+        <section className="a3s-form-custom-inspector" aria-label="自定义节点设置">
+          <CustomInspector
+            node={selected}
+            schema={props.selectedSchema}
+            onUpdate={props.onUpdateCustomNode}
+            onUpdateNode={props.onUpdateNode}
+            onUpdateSchema={props.onUpdateSchema}
+          />
+        </section>
       )}
       <div className="a3s-form-inspector-actions">
         <button type="button" className="a3s-form-secondary-action" onClick={props.onDuplicate}>
@@ -1119,7 +1290,7 @@ function PatchPanel({
         onChange={(event) => onTextChange(event.target.value)}
         placeholder={`{"apiVersion":"a3s.dev/form-patch/v1alpha1","baseRevision":${document.revision},"operations":[]}`}
       />
-      <button type="button" onClick={onReview}>
+      <button type="button" className="a3s-form-primary-action" onClick={onReview}>
         校验并应用
       </button>
       {patchMessage && (

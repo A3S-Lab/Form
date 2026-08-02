@@ -1,4 +1,5 @@
 import type { JsonSchema, UiNodeKind, UiOption } from '../core';
+import type { FormNodeDefinition, FormNodeRegistry } from './node-registry';
 
 export type DesignerPreset =
   | 'grid'
@@ -20,6 +21,8 @@ export interface DesignerCatalogItem {
   widget?: string;
   schema?: JsonSchema;
   options?: UiOption[];
+  extensionKey?: string;
+  defaults?: FormNodeDefinition['defaults'];
 }
 
 export interface DesignerCatalogSection {
@@ -235,6 +238,48 @@ export const FIELD_WIDGETS = DESIGNER_CATALOG.flatMap((section) => section.items
   .filter((item) => item.kind === 'field')
   .map((item) => ({ label: item.label, value: item.widget as string }));
 
-export function findCatalogItem(id: string): DesignerCatalogItem | undefined {
-  return DESIGNER_CATALOG.flatMap((section) => section.items).find((item) => item.id === id);
+export function createDesignerCatalog(
+  registry: FormNodeRegistry = {},
+): readonly DesignerCatalogSection[] {
+  const sections: DesignerCatalogSection[] = DESIGNER_CATALOG.map((section) => ({
+    ...section,
+    items: [...section.items],
+  }));
+  for (const [extensionKey, definition] of Object.entries(registry)) {
+    let section = sections.find((candidate) => candidate.id === definition.catalog.section);
+    if (!section) {
+      section = {
+        id: definition.catalog.section,
+        label: definition.catalog.sectionLabel,
+        items: [],
+      };
+      sections.push(section);
+    }
+    (section.items as DesignerCatalogItem[]).push({
+      id: `custom:${extensionKey}`,
+      label: definition.catalog.label,
+      description: definition.catalog.description,
+      glyph: definition.catalog.glyph,
+      kind: definition.kind,
+      widget: extensionKey,
+      schema: definition.schema,
+      extensionKey,
+      defaults: definition.defaults,
+    });
+  }
+  return sections;
+}
+
+export function fieldWidgets(catalog: readonly DesignerCatalogSection[]) {
+  return catalog
+    .flatMap((section) => section.items)
+    .filter((item) => item.kind === 'field')
+    .map((item) => ({ label: item.label, value: item.widget as string }));
+}
+
+export function findCatalogItem(
+  id: string,
+  catalog: readonly DesignerCatalogSection[] = DESIGNER_CATALOG,
+): DesignerCatalogItem | undefined {
+  return catalog.flatMap((section) => section.items).find((item) => item.id === id);
 }

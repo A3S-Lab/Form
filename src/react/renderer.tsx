@@ -21,6 +21,8 @@ import {
   updateFormValue,
   validateFormValue,
 } from '../core';
+import type { FormNodeRegistry } from './node-registry';
+import { SelectControl } from './select-control';
 
 export interface FormWidgetProps {
   id: string;
@@ -28,6 +30,8 @@ export interface FormWidgetProps {
   value: JsonValue | undefined;
   disabled: boolean;
   invalid: boolean;
+  required?: boolean;
+  describedBy?: string;
   options: UiOption[];
   onChange: (value: JsonValue) => void;
 }
@@ -43,16 +47,37 @@ export interface FormRendererProps {
   errors?: FieldError[];
   hostAdapter?: FormHostAdapter;
   widgetRegistry?: FormWidgetRegistry;
+  nodeRegistry?: FormNodeRegistry;
   readOnly?: boolean;
   locale?: string;
   className?: string;
 }
 
-function NativeWidget({ id, node, value, disabled, invalid, options, onChange }: FormWidgetProps) {
+function formItemStyle(width: number | undefined, extra?: React.CSSProperties) {
+  return {
+    '--a3s-form-item-column': `span ${width ?? 12}`,
+    ...extra,
+  } as React.CSSProperties;
+}
+
+function NativeWidget({
+  id,
+  node,
+  value,
+  disabled,
+  invalid,
+  required,
+  describedBy,
+  options,
+  onChange,
+}: FormWidgetProps) {
   const common: InputHTMLAttributes<HTMLInputElement> = {
     id,
     disabled,
+    required,
+    'aria-label': node.label ?? node.id,
     'aria-invalid': invalid || undefined,
+    'aria-describedby': describedBy,
     placeholder: node.placeholder,
   };
   switch (node.widget) {
@@ -61,7 +86,10 @@ function NativeWidget({ id, node, value, disabled, invalid, options, onChange }:
         <textarea
           id={id}
           disabled={disabled}
+          required={required}
+          aria-label={node.label ?? node.id}
           aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
           placeholder={node.placeholder}
           value={String(value ?? '')}
           onChange={(event) => onChange(event.target.value)}
@@ -81,29 +109,32 @@ function NativeWidget({ id, node, value, disabled, invalid, options, onChange }:
     case 'checkbox':
     case 'switch':
       return (
-        <label className="a3s-form-check">
+        <label className={`a3s-form-check is-${node.widget}${required ? ' is-required' : ''}`}>
           <input
             {...common}
             type="checkbox"
             checked={Boolean(value)}
             onChange={(event) => onChange(event.target.checked)}
           />
-          <span>{node.widget === 'switch' ? '启用' : node.label}</span>
+          <span>{node.label ?? '启用'}</span>
         </label>
       );
     case 'select':
       return (
-        <select
+        <SelectControl
           id={id}
           disabled={disabled}
+          required={required}
+          aria-label={node.label ?? node.id}
           aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
           value={String(value ?? '')}
           onChange={(event) => {
             const selected = options.find((option) => String(option.value) === event.target.value);
             onChange(selected?.value ?? event.target.value);
           }}
         >
-          <option value="">请选择</option>
+          <option value="">{node.placeholder ?? '请选择'}</option>
           {options.map((option) => (
             <option
               key={`${option.label}-${String(option.value)}`}
@@ -113,11 +144,17 @@ function NativeWidget({ id, node, value, disabled, invalid, options, onChange }:
               {option.label}
             </option>
           ))}
-        </select>
+        </SelectControl>
       );
     case 'radio':
       return (
-        <div className="a3s-form-choice-group" role="radiogroup" aria-labelledby={`${id}-label`}>
+        <div
+          className="a3s-form-choice-group"
+          role="radiogroup"
+          aria-label={node.label ?? node.id}
+          aria-describedby={describedBy}
+          aria-required={required || undefined}
+        >
           {options.map((option) => (
             <label key={`${option.label}-${String(option.value)}`}>
               <input
@@ -126,6 +163,7 @@ function NativeWidget({ id, node, value, disabled, invalid, options, onChange }:
                 value={String(option.value)}
                 checked={Object.is(value, option.value)}
                 disabled={disabled || option.disabled}
+                required={required}
                 onChange={() => onChange(option.value)}
               />
               <span>{option.label}</span>
@@ -147,6 +185,22 @@ function NativeWidget({ id, node, value, disabled, invalid, options, onChange }:
         />
       );
   }
+}
+
+function isRequiredField(plan: FormPlan, node: UiNode): boolean {
+  const tokens = node.schemaPath
+    ?.split('/')
+    .slice(1)
+    .map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'));
+  if (!tokens || tokens.length < 2 || tokens.at(-2) !== 'properties') return false;
+  let parent: unknown = plan.schema;
+  for (const token of tokens.slice(0, -2)) {
+    if (!parent || typeof parent !== 'object' || !(token in parent)) return false;
+    parent = (parent as Record<string, unknown>)[token];
+  }
+  if (!parent || typeof parent !== 'object') return false;
+  const required = (parent as { required?: unknown }).required;
+  return Array.isArray(required) && required.includes(tokens.at(-1));
 }
 
 function useOptions(
@@ -183,7 +237,16 @@ interface NodeViewProps extends FormRendererProps {
 }
 
 function NodeView(props: NodeViewProps): ReactNode {
-  const { plan, nodeId, value, onChange, widgetRegistry = {}, errorMap, prefix } = props;
+  const {
+    plan,
+    nodeId,
+    value,
+    onChange,
+    widgetRegistry = {},
+    nodeRegistry = {},
+    errorMap,
+    prefix,
+  } = props;
   const node = plan.nodeById[nodeId];
   const [activeLayoutChild, setActiveLayoutChild] = useState<string>();
   const state = fieldState(plan, nodeId, value);
@@ -195,13 +258,54 @@ function NodeView(props: NodeViewProps): ReactNode {
     props.locale ?? plan.metadata.locale ?? 'zh-CN',
   );
   if (!node || !state.visible) return null;
+  const extension = node.widget ? nodeRegistry[node.widget] : undefined;
+  if (extension) {
+    const CustomNode = extension.render;
+    const current = node.valuePath ? readFormValue(value, node.valuePath) : undefined;
+    const errors = node.valuePath ? (errorMap.get(node.valuePath) ?? []) : [];
+    const inputId = `${prefix}-${node.id}`;
+    const children = (node.children ?? []).length ? (
+      <div className="a3s-form-custom-children">
+        {(node.children ?? []).map((child) => (
+          <NodeView key={child} {...props} nodeId={child} />
+        ))}
+      </div>
+    ) : undefined;
+    return (
+      <div
+        className={`a3s-form-custom-node${errors.length ? ' is-invalid' : ''}`}
+        data-node-type={node.widget}
+        style={formItemStyle(node.width)}
+      >
+        <CustomNode
+          id={inputId}
+          node={node}
+          plan={plan}
+          value={current}
+          formValue={value}
+          disabled={Boolean(props.readOnly || !state.enabled)}
+          invalid={errors.length > 0}
+          errors={errors}
+          options={options}
+          onChange={(next) => {
+            if (node.valuePath) onChange(updateFormValue(value, node.valuePath, next));
+          }}
+          onFormChange={onChange}
+        >
+          {children}
+        </CustomNode>
+        {errors.map((error) => (
+          <div className="a3s-form-error" role="alert" key={error.code}>
+            {error.message}
+          </div>
+        ))}
+      </div>
+    );
+  }
   if (node.kind === 'content') {
     if (node.presentation === 'divider')
       return (
-        <div
-          className="a3s-form-content a3s-form-divider"
-          style={{ gridColumn: `span ${node.width ?? 12}` }}
-        >
+        <div className="a3s-form-content a3s-form-divider" style={formItemStyle(node.width)}>
           <span />
           {node.content && <em>{node.content}</em>}
           <span />
@@ -211,12 +315,12 @@ function NodeView(props: NodeViewProps): ReactNode {
       return (
         <div
           className="a3s-form-content a3s-form-spacer"
-          style={{ gridColumn: `span ${node.width ?? 12}`, height: node.gap ?? 24 }}
+          style={formItemStyle(node.width, { height: node.gap ?? 24 })}
           aria-hidden="true"
         />
       );
     return (
-      <div className="a3s-form-content" style={{ gridColumn: `span ${node.width ?? 12}` }}>
+      <div className="a3s-form-content" style={formItemStyle(node.width)}>
         {node.content}
       </div>
     );
@@ -225,7 +329,7 @@ function NodeView(props: NodeViewProps): ReactNode {
     const Tag = node.kind === 'section' ? 'section' : 'div';
     const layoutStyle = {
       '--a3s-form-gap': `${node.gap ?? 16}px`,
-      gridColumn: node.kind === 'root' ? undefined : `span ${node.width ?? 12}`,
+      '--a3s-form-item-column': `span ${node.width ?? 12}`,
     } as React.CSSProperties;
     if (node.layout === 'tabs') {
       const tabs = (node.children ?? [])
@@ -320,16 +424,29 @@ function NodeView(props: NodeViewProps): ReactNode {
   const current = readFormValue(value, node.valuePath);
   const errors = errorMap.get(node.valuePath) ?? [];
   const inputId = `${prefix}-${node.id}`;
+  const required = isRequiredField(plan, node);
+  const describedBy = [
+    node.description ? `${inputId}-help` : undefined,
+    ...errors.map((_, index) => `${inputId}-error-${index + 1}`),
+  ]
+    .filter(Boolean)
+    .join(' ');
   const Widget = widgetRegistry[node.widget ?? 'text'] ?? NativeWidget;
   if (node.kind === 'repeater') {
     const items = Array.isArray(current) ? current : [];
     return (
       <fieldset
-        className="a3s-form-field a3s-form-repeater"
-        style={{ gridColumn: `span ${node.width ?? 12}` }}
+        className={`a3s-form-field a3s-form-repeater${errors.length ? ' is-invalid' : ''}`}
+        style={formItemStyle(node.width)}
         disabled={props.readOnly || !state.enabled}
+        aria-describedby={describedBy || undefined}
       >
-        <legend>{node.label ?? node.id}</legend>
+        <legend className={required ? 'is-required' : undefined}>{node.label ?? node.id}</legend>
+        {node.description && (
+          <div className="a3s-form-help" id={`${inputId}-help`}>
+            {node.description}
+          </div>
+        )}
         {items.map((item, index) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: Primitive repeater values have no separate stable identity.
           <div className="a3s-form-repeat-row" key={`${node.id}-${index}`}>
@@ -365,16 +482,30 @@ function NodeView(props: NodeViewProps): ReactNode {
         >
           添加一项
         </button>
+        {errors.map((error, index) => (
+          <div
+            className="a3s-form-error"
+            id={`${inputId}-error-${index + 1}`}
+            role="alert"
+            key={`${error.code}-${error.message}`}
+          >
+            {error.message}
+          </div>
+        ))}
       </fieldset>
     );
   }
   return (
     <div
       className={`a3s-form-field${errors.length ? ' is-invalid' : ''}`}
-      style={{ gridColumn: `span ${node.width ?? 12}` }}
+      style={formItemStyle(node.width)}
     >
       {node.widget !== 'checkbox' && node.widget !== 'switch' && (
-        <label id={`${inputId}-label`} htmlFor={inputId}>
+        <label
+          id={`${inputId}-label`}
+          htmlFor={inputId}
+          className={required ? 'is-required' : undefined}
+        >
           {node.label ?? node.id}
         </label>
       )}
@@ -389,11 +520,18 @@ function NodeView(props: NodeViewProps): ReactNode {
         value={current}
         disabled={Boolean(props.readOnly || !state.enabled)}
         invalid={errors.length > 0}
+        required={required}
+        describedBy={describedBy || undefined}
         options={options}
         onChange={(next) => onChange(updateFormValue(value, node.valuePath as string, next))}
       />
-      {errors.map((error) => (
-        <div className="a3s-form-error" role="alert" key={error.code}>
+      {errors.map((error, index) => (
+        <div
+          className="a3s-form-error"
+          id={`${inputId}-error-${index + 1}`}
+          role="alert"
+          key={`${error.code}-${error.message}`}
+        >
           {error.message}
         </div>
       ))}
