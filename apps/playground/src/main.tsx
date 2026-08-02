@@ -43,24 +43,24 @@ function App() {
     <div className="playground-shell">
       <header className="playground-header">
         <div className="playground-brand">
-          <span className="playground-mark">A</span>
+          <button type="button" className="playground-back" aria-label="返回工作台">
+            ‹
+          </button>
+          <span className="playground-mark" aria-hidden="true">
+            ▤
+          </span>
           <span>
-            <strong>A3S Form</strong>
-            <small>AI 原生表单设计器</small>
+            <strong>{document.metadata.title}</strong>
+            <small>A3S Form · 表单设计器</small>
           </span>
         </div>
-        <nav aria-label="主导航">
-          <button type="button" className="is-active">
-            设计器
-          </button>
-          <button type="button">模板</button>
-          <button type="button">数据源</button>
-          <button type="button">发布记录</button>
-        </nav>
-        <div className="playground-header-actions">
+        <div className="playground-document-state">
           <span className={`playground-status ${compilation.ok ? 'is-ready' : 'is-error'}`}>
-            {compilation.ok ? '● 已就绪' : '● 编译失败'}
+            {compilation.ok ? '已同步' : `${compilation.diagnostics.length} 个问题`}
           </span>
+          <span>修订 {document.revision}</span>
+        </div>
+        <div className="playground-header-actions">
           <button type="button" className="playground-secondary" onClick={exportJson}>
             导出 JSON
           </button>
@@ -72,17 +72,6 @@ function App() {
           </span>
         </div>
       </header>
-      <div className="playground-context">
-        <div>
-          <span className="playground-back">‹</span>
-          <span className="playground-breadcrumb">工作台 / 人力资源 /</span>
-          <strong>{document.metadata.title}</strong>
-        </div>
-        <div>
-          <span>文档摘要</span>
-          <code>{(compilation.document?.digest ?? '尚未封存').slice(0, 23)}…</code>
-        </div>
-      </div>
       <main>
         <FormDesigner
           document={compilation.document ?? document}

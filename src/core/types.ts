@@ -32,6 +32,18 @@ export interface JsonSchema {
 
 export type UiNodeKind = 'root' | 'section' | 'group' | 'field' | 'repeater' | 'content';
 
+export type UiLayout =
+  | 'flow'
+  | 'grid'
+  | 'columns'
+  | 'card'
+  | 'tabs'
+  | 'tab'
+  | 'collapse'
+  | 'collapse-panel';
+
+export type UiPresentation = 'text' | 'divider' | 'spacer';
+
 export interface UiOption {
   label: string;
   value: JsonPrimitive;
@@ -50,6 +62,9 @@ export interface UiNode {
   width?: 1 | 2 | 3 | 4 | 6 | 12;
   placeholder?: string;
   content?: string;
+  layout?: UiLayout;
+  presentation?: UiPresentation;
+  gap?: 0 | 8 | 12 | 16 | 24 | 32;
   options?: UiOption[];
   dataSource?: string;
   readOnly?: boolean;
