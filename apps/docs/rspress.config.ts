@@ -7,7 +7,7 @@ export default defineConfig({
   base: process.env.DOCS_BASE ?? '/Form/',
   lang: 'zh',
   title: 'A3S Form',
-  description: 'AI Native Form Designer 的中文产品与开发文档',
+  description: 'A3S Form 产品与开发文档',
   logoText: 'A3S Form',
   globalStyles: resolve(import.meta.dirname, 'styles.css'),
   multiVersion: {
@@ -18,6 +18,34 @@ export default defineConfig({
     darkMode: false,
     search: true,
     lastUpdated: true,
+    nav: [
+      { text: '使用指南', link: '/guide/' },
+      {
+        text: '在线 Playground',
+        link: 'https://a3s-lab.github.io/Form/playground/',
+      },
+    ],
+    sidebar: {
+      '/': [
+        { text: '概览', link: '/' },
+        {
+          text: '使用指南',
+          link: '/guide/',
+          collapsed: false,
+          items: [
+            { text: '快速开始', link: '/guide/' },
+            { text: 'Playground', link: '/guide/playground' },
+            { text: '自定义表单节点', link: '/guide/custom-nodes' },
+            { text: 'WASM 加速', link: '/guide/wasm' },
+          ],
+        },
+        { text: '架构设计', link: '/architecture' },
+      ],
+      '/next/': [
+        { text: '开发预览', link: '/next/' },
+        { text: '开发指南', link: '/next/guide/' },
+      ],
+    },
     editLink: {
       docRepoBaseUrl: 'https://github.com/A3S-Lab/Form/tree/main/apps/docs/docs',
       text: '在 GitHub 上编辑此页',
@@ -30,7 +58,7 @@ export default defineConfig({
       },
     ],
     footer: {
-      message: 'A3S Form · AI Native Form Designer',
+      message: 'A3S Form · 浏览器表单基础设施',
     },
   },
 });

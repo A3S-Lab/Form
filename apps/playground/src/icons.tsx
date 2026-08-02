@@ -13,6 +13,8 @@ export type ProductIconName =
   | 'folder'
   | 'form'
   | 'layers'
+  | 'panel-left-close'
+  | 'panel-left-open'
   | 'plus'
   | 'save'
   | 'search'
@@ -147,6 +149,46 @@ export function ProductIcon({ name, size = 18, ...props }: ProductIconProps) {
           strokeLinejoin="round"
           strokeWidth="1.6"
         />
+      )}
+      {name === 'panel-left-close' && (
+        <>
+          <rect
+            x="3.5"
+            y="4"
+            width="17"
+            height="16"
+            rx="2.5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <path
+            d="M9 4v16m6.5-11-3 3 3 3"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.6"
+          />
+        </>
+      )}
+      {name === 'panel-left-open' && (
+        <>
+          <rect
+            x="3.5"
+            y="4"
+            width="17"
+            height="16"
+            rx="2.5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <path
+            d="M9 4v16m3.5-11 3 3-3 3"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.6"
+          />
+        </>
       )}
       {name === 'plus' && (
         <path d="M12 5v14M5 12h14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />

@@ -121,17 +121,16 @@ function App() {
             </span>
             <span>
               <strong>{document.metadata.title}</strong>
-              <small>表单设计器</small>
+              <small>
+                <span className={`playground-status ${compilation.ok ? 'is-ready' : 'is-error'}`}>
+                  <ProductIcon name={compilation.ok ? 'check' : 'close'} size={11} />
+                  {compilation.ok ? '本地已保存' : `${compilation.diagnostics.length} 个问题`}
+                </span>
+                <i aria-hidden="true">·</i>
+                FORM
+                <i aria-hidden="true">·</i>v{document.revision}
+              </small>
             </span>
-          </div>
-          <div className="playground-document-state">
-            <span className={`playground-status ${compilation.ok ? 'is-ready' : 'is-error'}`}>
-              <ProductIcon name={compilation.ok ? 'check' : 'close'} size={13} />
-              {compilation.ok ? '所有更改已保存' : `${compilation.diagnostics.length} 个问题待处理`}
-            </span>
-            <i aria-hidden="true" />
-            <span>版本 {document.revision}</span>
-            <span>{storageAvailable ? '本地工作区' : '临时会话'}</span>
           </div>
           <div className="playground-header-actions">
             <a
@@ -141,21 +140,16 @@ function App() {
               rel="noreferrer"
             >
               <ProductIcon name="book" size={15} />
-              帮助
+              <span>帮助</span>
             </a>
             <button type="button" className="playground-secondary" onClick={exportJson}>
               <ProductIcon name="download" size={15} />
-              导出
+              <span>导出</span>
             </button>
             <button type="button" className="playground-primary" onClick={save}>
               <ProductIcon name={saved ? 'check' : 'save'} size={15} />
-              {saved ? '已保存' : '保存表单'}
+              <span>{saved ? '已保存' : '保存表单'}</span>
             </button>
-            <span className="playground-user">
-              <span className="playground-avatar" role="img" aria-label="当前用户">
-                林
-              </span>
-            </span>
           </div>
         </header>
       )}
