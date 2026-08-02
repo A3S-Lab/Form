@@ -233,6 +233,105 @@ describe('React FormRenderer', () => {
     expect(screen.getByTestId('native-value').textContent).toContain('"role":"admin"');
   });
 
+  it('renders tabs, collapsible panels, column containers and presentation nodes', () => {
+    const document = createDocument();
+    document.rules = [];
+    document.ui.nodes.push(
+      {
+        id: 'tabs',
+        kind: 'group',
+        label: '分类资料',
+        layout: 'tabs',
+        children: ['tab-a', 'tab-b'],
+      },
+      {
+        id: 'tab-a',
+        kind: 'group',
+        label: '基本资料',
+        layout: 'tab',
+        children: ['tab-a-content', 'divider', 'spacer'],
+      },
+      {
+        id: 'tab-b',
+        kind: 'group',
+        label: '补充资料',
+        layout: 'tab',
+        children: ['tab-b-content'],
+      },
+      { id: 'tab-a-content', kind: 'content', content: '基本页内容' },
+      { id: 'tab-b-content', kind: 'content', content: '补充页内容' },
+      {
+        id: 'divider',
+        kind: 'content',
+        presentation: 'divider',
+        content: '下一部分',
+      },
+      { id: 'spacer', kind: 'content', presentation: 'spacer', gap: 32 },
+      {
+        id: 'collapse',
+        kind: 'group',
+        label: '更多设置',
+        layout: 'collapse',
+        children: ['panel-a', 'panel-b'],
+      },
+      {
+        id: 'panel-a',
+        kind: 'group',
+        label: '通知设置',
+        layout: 'collapse-panel',
+        children: ['panel-a-content'],
+      },
+      {
+        id: 'panel-b',
+        kind: 'group',
+        label: '权限设置',
+        layout: 'collapse-panel',
+        children: ['panel-b-content'],
+      },
+      { id: 'panel-a-content', kind: 'content', content: '通知内容' },
+      { id: 'panel-b-content', kind: 'content', content: '权限内容' },
+      {
+        id: 'columns',
+        kind: 'group',
+        label: '双栏内容',
+        layout: 'columns',
+        children: ['column-a', 'column-b'],
+      },
+      {
+        id: 'column-a',
+        kind: 'group',
+        layout: 'flow',
+        width: 6,
+        children: ['column-a-content'],
+      },
+      {
+        id: 'column-b',
+        kind: 'group',
+        layout: 'flow',
+        width: 6,
+        children: ['column-b-content'],
+      },
+      { id: 'column-a-content', kind: 'content', content: '左栏' },
+      { id: 'column-b-content', kind: 'content', content: '右栏' },
+    );
+    document.ui.nodes[0].children?.push('tabs', 'collapse', 'columns');
+    render(<RendererHarness document={document} />);
+    expect(screen.getByRole('tablist', { name: '分类资料' })).toBeTruthy();
+    expect(screen.getByText('基本页内容')).toBeTruthy();
+    expect(screen.queryByText('补充页内容')).toBeNull();
+    expect(screen.getByText('下一部分')).toBeTruthy();
+    expect(window.document.querySelector('.a3s-form-spacer')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '补充资料' }));
+    expect(screen.getByText('补充页内容')).toBeTruthy();
+    expect(screen.queryByText('基本页内容')).toBeNull();
+    expect(screen.getByText('通知设置')).toBeTruthy();
+    expect(screen.getByText('权限设置')).toBeTruthy();
+    expect(screen.getByText('通知内容')).toBeTruthy();
+    expect(screen.getByText('权限内容')).toBeTruthy();
+    expect(screen.getByText('左栏')).toBeTruthy();
+    expect(screen.getByText('右栏')).toBeTruthy();
+  });
+
   it('uses host actions and renders externally controlled errors and read-only state', async () => {
     const document = createDocument();
     document.actions?.unshift({

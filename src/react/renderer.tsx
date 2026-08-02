@@ -179,11 +179,13 @@ interface NodeViewProps extends FormRendererProps {
   nodeId: string;
   errorMap: Map<string, FieldError[]>;
   prefix: string;
+  suppressHeading?: boolean;
 }
 
 function NodeView(props: NodeViewProps): ReactNode {
   const { plan, nodeId, value, onChange, widgetRegistry = {}, errorMap, prefix } = props;
   const node = plan.nodeById[nodeId];
+  const [activeLayoutChild, setActiveLayoutChild] = useState<string>();
   const state = fieldState(plan, nodeId, value);
   const options = useOptions(
     node,
@@ -193,15 +195,106 @@ function NodeView(props: NodeViewProps): ReactNode {
     props.locale ?? plan.metadata.locale ?? 'zh-CN',
   );
   if (!node || !state.visible) return null;
-  if (node.kind === 'content') return <div className="a3s-form-content">{node.content}</div>;
+  if (node.kind === 'content') {
+    if (node.presentation === 'divider')
+      return (
+        <div
+          className="a3s-form-content a3s-form-divider"
+          style={{ gridColumn: `span ${node.width ?? 12}` }}
+        >
+          <span />
+          {node.content && <em>{node.content}</em>}
+          <span />
+        </div>
+      );
+    if (node.presentation === 'spacer')
+      return (
+        <div
+          className="a3s-form-content a3s-form-spacer"
+          style={{ gridColumn: `span ${node.width ?? 12}`, height: node.gap ?? 24 }}
+          aria-hidden="true"
+        />
+      );
+    return (
+      <div className="a3s-form-content" style={{ gridColumn: `span ${node.width ?? 12}` }}>
+        {node.content}
+      </div>
+    );
+  }
   if (node.kind !== 'field' && node.kind !== 'repeater') {
     const Tag = node.kind === 'section' ? 'section' : 'div';
+    const layoutStyle = {
+      '--a3s-form-gap': `${node.gap ?? 16}px`,
+      gridColumn: node.kind === 'root' ? undefined : `span ${node.width ?? 12}`,
+    } as React.CSSProperties;
+    if (node.layout === 'tabs') {
+      const tabs = (node.children ?? [])
+        .map((child) => plan.nodeById[child])
+        .filter((child) => child !== undefined);
+      const active = tabs.some((tab) => tab.id === activeLayoutChild)
+        ? activeLayoutChild
+        : tabs[0]?.id;
+      return (
+        <section
+          className="a3s-form-layout a3s-form-tabs"
+          aria-labelledby={node.label ? `${prefix}-${node.id}-title` : undefined}
+          style={layoutStyle}
+        >
+          {!props.suppressHeading && node.label && (
+            <header>
+              <h2 id={`${prefix}-${node.id}-title`}>{node.label}</h2>
+              {node.description && <p>{node.description}</p>}
+            </header>
+          )}
+          <div className="a3s-form-tablist" role="tablist" aria-label={node.label}>
+            {tabs.map((tab) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab.id === active}
+                key={tab.id}
+                onClick={() => setActiveLayoutChild(tab.id)}
+              >
+                {tab.label ?? tab.id}
+              </button>
+            ))}
+          </div>
+          {active && <NodeView {...props} nodeId={active} suppressHeading />}
+        </section>
+      );
+    }
+    if (node.layout === 'collapse') {
+      return (
+        <section
+          className="a3s-form-layout a3s-form-collapse"
+          aria-labelledby={node.label ? `${prefix}-${node.id}-title` : undefined}
+          style={layoutStyle}
+        >
+          {!props.suppressHeading && node.label && (
+            <header>
+              <h2 id={`${prefix}-${node.id}-title`}>{node.label}</h2>
+              {node.description && <p>{node.description}</p>}
+            </header>
+          )}
+          {(node.children ?? []).map((child) => {
+            const panel = plan.nodeById[child];
+            return (
+              <details key={child} open>
+                <summary>{panel?.label ?? child}</summary>
+                <NodeView {...props} nodeId={child} suppressHeading />
+              </details>
+            );
+          })}
+        </section>
+      );
+    }
     return (
       <Tag
-        className={`a3s-form-layout a3s-form-${node.kind}`}
+        className={`a3s-form-layout a3s-form-${node.kind} a3s-form-${node.layout ?? 'flow'}`}
         aria-labelledby={node.label ? `${prefix}-${node.id}-title` : undefined}
+        style={layoutStyle}
       >
-        {node.label && (
+        {!props.suppressHeading && node.label && (
           <header>
             <h2 id={`${prefix}-${node.id}-title`}>{node.label}</h2>
             {node.description && <p>{node.description}</p>}
@@ -209,7 +302,12 @@ function NodeView(props: NodeViewProps): ReactNode {
         )}
         <div
           className="a3s-form-grid"
-          style={{ '--a3s-form-columns': node.columns ?? 12 } as React.CSSProperties}
+          style={
+            {
+              '--a3s-form-columns': node.columns ?? 12,
+              '--a3s-form-gap': `${node.gap ?? 16}px`,
+            } as React.CSSProperties
+          }
         >
           {(node.children ?? []).map((child) => (
             <NodeView key={child} {...props} nodeId={child} />

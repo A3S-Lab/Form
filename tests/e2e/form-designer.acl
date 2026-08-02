@@ -16,7 +16,7 @@ suite "a3s-form-designer" {
         }
 
         wait "ready" {
-            text = "AI 原生表单设计器"
+            text = "A3S Form · 表单设计器"
         }
 
         expect "designer-ready" {
@@ -32,16 +32,36 @@ suite "a3s-form-designer" {
             value = "工龄"
         }
 
-        check "require-number" {
-            target = css(".a3s-form-toggle input[type='checkbox']")
+        click "validation-settings" {
+            target = css(".a3s-form-panel-tabs.is-inspector button:nth-child(2)")
+        }
+
+        expect "validation-ready" {
+            visible = css("label.a3s-form-toggle")
+        }
+
+        click "require-number" {
+            target = css("label.a3s-form-toggle:has(input[aria-label='必填字段'])")
+        }
+
+        click "open-structure" {
+            target = role("button", "结构")
         }
 
         click "select-start-date" {
             target = role("treeitem", "选择入职日期")
         }
 
-        uncheck "optional-start-date" {
-            target = css(".a3s-form-toggle input[type='checkbox']")
+        click "start-date-validation" {
+            target = css(".a3s-form-panel-tabs.is-inspector button:nth-child(2)")
+        }
+
+        expect "start-date-validation-ready" {
+            visible = css("label.a3s-form-toggle")
+        }
+
+        click "optional-start-date" {
+            target = css("label.a3s-form-toggle:has(input[aria-label='必填字段'])")
         }
 
         expect "field-updated" {
@@ -115,6 +135,47 @@ suite "a3s-form-designer" {
 
         click "design" {
             target = role("button", "设计")
+        }
+
+        click "open-components" {
+            target = role("button", "组件")
+        }
+
+        click "select-root" {
+            target = css(".a3s-form-page-heading")
+        }
+
+        click "add-two-columns" {
+            target = role("button", "添加两栏布局")
+        }
+
+        expect "first-column" {
+            visible = css("[data-node-id='column-1']")
+        }
+
+        expect "second-column" {
+            visible = css("[data-node-id='column-2']")
+        }
+
+        drag "field-into-column" {
+            source = css("[aria-label='添加单行文本字段']")
+            target = css("[aria-label='插入到column-1第1位']")
+        }
+
+        expect "field-in-column" {
+            visible = css("[data-node-id='column-1'] .a3s-form-design-field")
+        }
+
+        click "select-root-again" {
+            target = css(".a3s-form-page-heading")
+        }
+
+        click "add-tabs" {
+            target = role("button", "添加标签页")
+        }
+
+        click "second-tab" {
+            target = role("tab", "标签页 2")
         }
 
         click "save-document" {
