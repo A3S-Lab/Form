@@ -1,5 +1,8 @@
+* text=auto eol=lf
+
 *.sh text eol=lf
 *.ps1 text eol=lf
+*.wasm binary
 
 # The repository is reported by its product-contract language. TypeScript,
 # Rust/WASM and styles are delivery adapters around the Gleam domain model.

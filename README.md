@@ -1,36 +1,44 @@
 <p align="center">
-  <img src="assets/readme/hero.svg" width="100%" alt="A3S Form — AI Native Form Designer，以一个版本化表单契约连接设计、编译和运行时渲染">
+  <img src="assets/readme/hero.svg" width="100%" alt="A3S Form — an AI-native form designer that connects design, compilation, and runtime rendering through one versioned form contract">
 </p>
 
 <p align="center">
   <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-7137d8">
   <img alt="Runtime Node 20+" src="https://img.shields.io/badge/runtime-Node%2020%2B-2587f5">
   <img alt="Coverage above 95 percent" src="https://img.shields.io/badge/coverage-%3E95%25-3b53dc">
+  <a href="https://github.com/A3S-Lab/Form/actions/workflows/pages.yml"><img alt="GitHub Pages deployment" src="https://github.com/A3S-Lab/Form/actions/workflows/pages.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-101118"></a>
 </p>
 
 <p align="center">
-  <strong>一次定义，到处渲染；AI 可以提出修改，但不能绕过审阅。</strong><br>
-  面向 A3S Workflow、A3S Cloud、业务产品和 Coding Agent 的可嵌入 AI Native Form Designer。
+  <strong>Define once, render everywhere. AI may propose changes, but it cannot bypass review.</strong><br>
+  An embeddable AI-native form designer for A3S Workflow, A3S Cloud, product teams, and coding agents.
 </p>
 
 <p align="center">
-  <a href="#quick-start">一键体验</a> ·
-  <a href="#capabilities">能力</a> ·
-  <a href="#architecture">架构</a> ·
-  <a href="#embedding">嵌入</a> ·
+  <a href="https://a3s-lab.github.io/Form/">Documentation</a> ·
+  <a href="https://a3s-lab.github.io/Form/playground/">Live Playground</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#capabilities">Capabilities</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#embedding">Embedding</a> ·
   <a href="#agent">Coding Agent</a> ·
-  <a href="#quality">质量</a>
+  <a href="#quality">Quality</a>
 </p>
 
 > [!NOTE]
-> 当前仓库提供可运行的 **v0.1.0 源码与工作区包**：中文 Designer、受控 Renderer、确定性 Compiler、React/Vue/Web Component 适配、Workflow/Cloud 契约、CLI 与 `$a3s-form` Skill 均已落地。发布到包注册表前，请通过源码或 workspace dependency 集成。
+> This repository contains the runnable **v0.1.0 source and workspace package**: the visual Designer, controlled Renderer, deterministic Compiler, React/Vue/Web Component adapters, Workflow and Cloud contracts, CLI, and the `$a3s-form` skill. Until the package is published to a registry, integrate it from source or as a workspace dependency.
 
 <a id="quick-start"></a>
 
-## 一键体验
+## Quick Start
 
-准备好 Git 与 Bun 即可；Windows 首次可运行 `winget install --id Oven-sh.Bun --exact`，macOS/Linux 脚本会在缺少 Bun 时调用官方安装器。部署入口会锁定依赖、构建包和中文体验站，并在 `http://127.0.0.1:4176` 启动本地服务。
+The hosted documentation and Playground are available at:
+
+- [Documentation](https://a3s-lab.github.io/Form/)
+- [Live Playground](https://a3s-lab.github.io/Form/playground/)
+
+For local development, install Git and Bun. On Windows, Bun can be installed with `winget install --id Oven-sh.Bun --exact`. The macOS/Linux installer downloads Bun when it is missing. The deployment scripts install locked dependencies, build the package and Playground, and start a local server at `http://127.0.0.1:4176`.
 
 **Windows PowerShell**
 
@@ -40,7 +48,7 @@ Set-Location Form
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy.ps1
 ```
 
-Windows 服务通过隐藏进程启动，不会弹出 cmd 窗口。停止服务：
+The Windows service starts as a hidden process. Stop it with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
@@ -54,36 +62,36 @@ cd Form
 ./scripts/install.sh
 ```
 
-停止服务：
+Stop the service with:
 
 ```bash
 ./scripts/stop.sh
 ```
 
-使用 `-NoStart`（Windows）或 `--no-start`（macOS/Linux）可以只完成依赖安装和构建；`-Port 4200` / `--port 4200` 可以切换端口。该服务用于本地体验和嵌入调试，生产托管应接入宿主已有的静态资源与鉴权设施。
+Use `-NoStart` on Windows or `--no-start` on macOS/Linux to install and build without starting the server. Use `-Port 4200` or `--port 4200` to choose another port. The local server is intended for evaluation and embedding development; production hosting should use the host product's existing static asset and authentication infrastructure.
 
 <a id="capabilities"></a>
 
-## 一个表单契约，四个产品面
+## One Form Contract, Four Product Surfaces
 
-普通 schema renderer 只能画输入框。A3S Form 让设计、预览、运行时和 Agent 修改共享相同语义，并明确谁拥有业务数据与副作用。
+A basic schema renderer only draws inputs. A3S Form gives design, preview, runtime rendering, and agent-authored changes the same semantics while making ownership of business data and side effects explicit.
 
-| 产品面 | 已实现能力 |
+| Surface | Implemented capabilities |
 | --- | --- |
-| **Form Designer** | A3S Office 组件样式、中文字段库、结构树、栅格/分栏/标签页/折叠布局、跨容器拖放、自定义节点、实时预览、撤销/重做与编译诊断 |
-| **Form Renderer** | 受控值、字段校验、显隐/启用规则、数据源选项、动作回调、只读与外部错误、自定义节点与重复项 |
-| **Form Compiler** | 输入边界、语义校验、依赖环检测、能力检查、canonical SHA-256、不可变 `FormPlan`、可取消 Worker |
-| **Agent Interface** | JSON CLI、revision-bound `FormPatch`、`$a3s-form` Skill、机器可读诊断和原子修改 |
+| **Form Designer** | A3S Office component styling, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, live preview, undo/redo, and compiler diagnostics |
+| **Form Renderer** | Controlled values, field validation, visibility/enabled rules, data-source options, action callbacks, read-only and external-error states, custom nodes, and repeaters |
+| **Form Compiler** | Input boundaries, semantic validation, dependency-cycle detection, capability checks, canonical SHA-256, immutable `FormPlan`, and a cancellable Worker |
+| **Agent Interface** | JSON CLI, revision-bound `FormPatch`, `$a3s-form` skill, machine-readable diagnostics, and atomic changes |
 
-核心不变量：
+Core invariants:
 
-- `FormDocument` 是 schema、UI、规则、引用、revision 和 digest 的唯一事实源。
-- Designer 与 Renderer 都消费同一个编译器产生的 `FormPlan`。
-- AI 只提交有界补丁；revision 冲突会失败，不会覆盖更新的人工作业。
-- 组件只发出值与动作；持久化、身份、授权、密钥和副作用属于宿主。
-- 文档不执行任意 JavaScript；widget、data source、action 只解析宿主允许的 registry key。
+- `FormDocument` is the single source of truth for schema, UI, rules, references, revision, and digest.
+- Designer and Renderer consume the same compiler-produced `FormPlan`.
+- AI submits bounded patches; revision conflicts fail instead of overwriting newer human work.
+- Components emit values and actions only. Persistence, identity, authorization, secrets, and side effects belong to the host.
+- Documents never execute arbitrary JavaScript. Widget, data-source, and action keys resolve only through host-approved registries.
 
-### React 最小嵌入
+### Minimal React embedding
 
 ```tsx
 import { assertCompiled } from '@a3s-lab/form/core';
@@ -104,83 +112,83 @@ const plan = assertCompiled(document);
 
 <a id="architecture"></a>
 
-## 架构
+## Architecture
 
 <p align="center">
-  <img src="assets/readme/architecture.svg" width="100%" alt="A3S Form 运行架构：人工与 Agent 受控编辑 canonical FormDocument，确定性编译器产生 FormPlan，React、Vue 与 Web Component 嵌入宿主，数据与动作由 Workflow 或 Cloud 持有">
+  <img src="assets/readme/architecture.svg" width="100%" alt="A3S Form runtime architecture: people and agents edit a canonical FormDocument through governed changes; the deterministic compiler produces a FormPlan consumed by React, Vue, and Web Components while Workflow or Cloud owns data and actions">
 </p>
 
 ```text
-                 人工作者                     Coding Agent
-                    │                    CLI / $a3s-form Skill
-                    └──────────┬───────────────┘
-                               │ FormPatch（校验 + 审阅）
-                               ▼
-                    ┌──────────────────────┐
-     中文 Designer ◄┤ canonical FormDocument├► revision + SHA-256
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    确定性 Compiler / Worker
-                               │ immutable FormPlan
-                  ┌────────────┼─────────────┐
-                  ▼            ▼             ▼
-               React         Vue 3      Web Component
-                  └────────────┼─────────────┘
-                               │ controlled value / action
-                  ┌────────────┴─────────────────────────┐
-                  ▼                                      ▼
-       A3S Workflow（FormRef / durable run）   A3S Cloud（tenant / auth / data）
+                 Human author                    Coding Agent
+                    │                       CLI / $a3s-form skill
+                    └────────────┬────────────────────┘
+                                 │ reviewed + validated FormPatch
+                                 ▼
+                     ┌────────────────────────┐
+          Designer ◄─┤ canonical FormDocument├─► revision + SHA-256
+                     └────────────┬───────────┘
+                                  │
+                                  ▼
+                     Deterministic Compiler / Worker
+                                  │ immutable FormPlan
+                   ┌──────────────┼──────────────┐
+                   ▼              ▼              ▼
+                React          Vue 3       Web Component
+                   └──────────────┼──────────────┘
+                                  │ controlled value / action
+                   ┌──────────────┴──────────────────────────┐
+                   ▼                                         ▼
+        A3S Workflow (FormRef / durable run)      A3S Cloud (tenant / auth / data)
 ```
 
-`FormDocument` 包含：
+`FormDocument` contains:
 
 ```text
-schema          受支持的 JSON Schema 2020-12 子集
-ui              节点、布局、widget key、提示与选项
-rules           visible / enabled / computed / validate 纯表达式
-dataSources     宿主解析的声明式数据请求
-actions         宿主解析的声明式动作
-metadata        标题、语言、所有权与兼容信息
-revision        乐观版本
+schema          supported JSON Schema 2020-12 subset
+ui              nodes, layouts, widget keys, hints, and options
+rules           pure visible / enabled / computed / validate expressions
+dataSources     declarative data requests resolved by the host
+actions         declarative actions resolved by the host
+metadata        title, locale, ownership, and compatibility information
+revision        optimistic version
 digest          canonical SHA-256
 ```
 
-完整设计见 [架构说明](docs/architecture.md) 与 [安全边界](docs/security.md)。
+See [Architecture](docs/architecture.md) and [Security Boundaries](docs/security.md) for the complete design.
 
 <a id="embedding"></a>
 
-## 为 A3S Cloud 与 Workflow 而生的嵌入边界
+## Embedding Boundaries for A3S Cloud and Workflow
 
-| 集成 | 契约 |
+| Integration | Contract |
 | --- | --- |
-| **A3S Cloud** | `createA3SCloudFormAdapter` 注入 organization/project/environment 上下文、数据源和动作；Cloud 继续拥有权限、存储、密钥和审计 |
-| **Workflow 节点配置** | 节点只固定 `FormRef { uri, revision, digest, mode: configuration }` 与校验后的配置值 |
-| **耐久人工交互** | 运行发出 `interaction` FormRef 并暂停；提交匹配原 revision/digest、通过 schema 后才能恢复运行 |
-| **A3S Code agentic 节点** | Agent 可以请求受治理表单交互，但不获得开放浏览器、生产凭据或无界动作通道 |
+| **A3S Cloud** | `createA3SCloudFormAdapter` injects organization/project/environment context, data sources, and actions. Cloud retains ownership of authorization, storage, secrets, and audit logs. |
+| **Workflow node configuration** | A node pins only `FormRef { uri, revision, digest, mode: configuration }` and a validated configuration value. |
+| **Durable human interaction** | A run emits an `interaction` FormRef and pauses. It resumes only after the submission matches the original revision/digest and passes schema validation. |
+| **A3S Code agentic nodes** | An agent may request governed form interaction but receives no open browser, production credentials, or unbounded action channel. |
 
-表单升级不会静默改变已发布工作流。已开始的运行始终按最初固定的 digest 校验。Core compiler 无数据库和网络依赖，可在 Worker、本地进程或宿主隔离 Runtime 中作为无状态任务独立扩缩容。
+Form upgrades never mutate published workflows silently. An in-flight run is always validated against its originally pinned digest. The core compiler has no database or network dependency, so it can scale independently as a stateless task in a Worker, local process, or isolated host runtime.
 
-支持的导出：
+Supported exports:
 
-| Export | 用途 |
+| Export | Purpose |
 | --- | --- |
-| `@a3s-lab/form/core` | 文档、编译、校验、补丁、模板和 headless state |
-| `@a3s-lab/form/react` | React Designer 与 Renderer |
+| `@a3s-lab/form/core` | Documents, compilation, validation, patches, templates, and headless state |
+| `@a3s-lab/form/react` | React Designer and Renderer |
 | `@a3s-lab/form/vue` | Vue 3 `v-model` adapter |
-| `@a3s-lab/form/web-component` | `<a3s-form-designer>` / `<a3s-form-renderer>` |
+| `@a3s-lab/form/web-component` | `<a3s-form-designer>` and `<a3s-form-renderer>` |
 | `@a3s-lab/form/cloud` | A3S Cloud host adapter |
-| `@a3s-lab/form/workflow` | FormRef、交互请求与提交校验 |
-| `@a3s-lab/form/compiler.worker.js` | 可取消浏览器编译 Worker |
-| `@a3s-lab/form/styles.css` | 与 A3S Office 同源 token、控件密度和交互状态的共享样式 |
+| `@a3s-lab/form/workflow` | FormRef, interaction request, and submission validation |
+| `@a3s-lab/form/compiler.worker.js` | Cancellable browser compiler Worker |
+| `@a3s-lab/form/styles.css` | Shared A3S Office-aligned tokens, control density, and interaction states |
 
-自定义节点注册、React/Vue/Web Component 与宿主适配示例见 [集成指南](docs/integration.md)。
+See the [Integration Guide](docs/integration.md) for custom node registration and React, Vue, Web Component, and host adapter examples.
 
 <a id="agent"></a>
 
-## Coding Agent CLI 与 Skill
+## Coding Agent CLI and Skill
 
-构建后，`a3s-form` 的所有命令都输出 JSON，适合 Codex 等本地 Coding Agent 串联：
+After building the project, every `a3s-form` command emits JSON and can be composed by local coding agents such as Codex:
 
 ```bash
 node dist/cli.js sample --output form.json --pretty
@@ -191,57 +199,66 @@ node dist/cli.js patch form.json change.patch.json --output candidate.json --pre
 node dist/cli.js digest candidate.json
 ```
 
-推荐 Agent 流程：
+Recommended agent flow:
 
 ```text
 validate current
-  -> 生成绑定 baseRevision 的 FormPatch
-  -> patch 到 candidate
-  -> validate candidate
-  -> diff 供人或宿主审阅
-  -> 批准后替换并重新固定 digest
+  -> generate a FormPatch bound to baseRevision
+  -> patch into a candidate
+  -> validate the candidate
+  -> provide a diff for human or host review
+  -> replace the document and pin a new digest only after approval
 ```
 
-Skill 位于 [`skills/a3s-form`](skills/a3s-form/SKILL.md)。它要求 Agent 以 CLI 为语义权威，不通过抓取 UI 猜测文档，也不直接伪造 revision 或 digest。
+The skill lives at [`skills/a3s-form`](skills/a3s-form/SKILL.md). It requires the agent to treat the CLI as the semantic authority, never infer a document by scraping the UI, and never fabricate revisions or digests.
 
 <a id="quality"></a>
 
-## 可验证的质量基线
+## Verifiable Quality Baseline
 
-当前全量运行时代码覆盖率：
+Current full runtime coverage:
 
-| 指标 | 覆盖率 |
+| Metric | Coverage |
 | --- | ---: |
 | Statements | **99.22%** |
 | Branches | **96.08%** |
 | Functions | **99.01%** |
 | Lines | **99.61%** |
 
-- 93 项单元与跨框架集成测试全部通过。
-- A3S Test 在本地使用无头浏览器完成 Designer → Preview → validation → action 的 27 步端到端验收。
-- A3S Test 面向本地 Coding Agent 使用，不接入 CI，也不上传截图、视频或证据。
-- CI 只执行锁定依赖、lint、类型检查、覆盖率门禁、包/CLI 构建和 Playground 构建。
+- All 123 unit and cross-framework integration tests pass.
+- The repository includes a local A3S Test flow covering Designer → Preview → validation → action.
+- A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
+- CI installs locked dependencies and runs linting, type checks, coverage gates, package/CLI builds, documentation builds, and the Playground build.
 
 ```bash
 bun run check
 ```
 
-## 仓库结构
+## GitHub Pages
+
+Every push to `main` runs [the Pages workflow](.github/workflows/pages.yml), builds the versioned documentation and Playground, combines both static outputs, and deploys them through GitHub Actions.
+
+- Site: <https://a3s-lab.github.io/Form/>
+- Playground: <https://a3s-lab.github.io/Form/playground/>
+
+## Repository Layout
 
 ```text
-apps/playground/           中文可运行体验站
-src/core/                  文档、编译器、补丁、表达式与状态
-src/react/                 Designer 与 Renderer
+apps/playground/           runnable product workspace and form designer
+apps/docs/                 versioned documentation site
+src/core/                  documents, compiler, patches, expressions, state, and WASM
+src/react/                 Designer, Renderer, control system, and custom node registry
 src/adapters/              A3S Cloud host adapter
-src/integrations/          A3S Workflow FormRef 与交互契约
-src/workers/               可取消编译 Worker/client
-skills/a3s-form/           Coding Agent Skill
-scripts/deploy.ps1         Windows 一键构建与隐藏部署
-scripts/install.sh         macOS/Linux 一键构建与部署
-tests/                     单元、集成和本地 A3S Test ACL
-docs/                      架构、集成与安全说明
+src/integrations/          A3S Workflow FormRef and interaction contracts
+src/workers/               cancellable compiler Worker/client
+skills/a3s-form/           coding agent skill
+scripts/deploy.ps1         Windows build and hidden local deployment
+scripts/install.sh         macOS/Linux build and local deployment
+tests/                     unit, integration, and local A3S Test coverage
+wasm/                      Rust source for the deterministic SHA-256 WASM module
+docs/                      architecture, integration, and security references
 ```
 
-## 许可证
+## License
 
-A3S Form 使用 [MIT License](LICENSE)。
+A3S Form is available under the [MIT License](LICENSE).
