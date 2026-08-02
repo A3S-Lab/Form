@@ -1,0 +1,53 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/configure-pages@v5
+      - run: bun install --frozen-lockfile
+      - name: 构建中文版本化文档
+        run: bun run docs:build
+      - name: 构建在线 Playground
+        env:
+          A3S_FORM_BASE: /Form/playground/
+        run: bun run playground:build
+      - name: 合并静态站点
+        run: |
+          mkdir -p apps/docs/doc_build/playground
+          cp -R playground-dist/. apps/docs/doc_build/playground/
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/docs/doc_build
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: 部署 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

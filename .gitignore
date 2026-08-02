@@ -4,5 +4,8 @@ dist/
 playground-dist/
 coverage/
 .a3s-form/
+.a3s-test/
+apps/docs/doc_build/
+wasm/**/target/
 .DS_Store
 *.log

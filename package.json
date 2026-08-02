@@ -51,6 +51,7 @@
       "import": "./dist/workflow.js"
     },
     "./compiler.worker.js": "./dist/workers/compiler.worker.js",
+    "./wasm/sha256.wasm": "./dist/wasm/sha256.wasm",
     "./styles.css": "./dist/styles.css"
   },
   "types": "./dist/index.d.ts",
@@ -76,9 +77,14 @@
   },
   "scripts": {
     "build": "bun scripts/build.mjs && tsc -p tsconfig.build.json",
+    "wasm:build": "bun scripts/build-wasm.mjs",
+    "wasm:benchmark": "bun scripts/benchmark-wasm.mjs",
     "dev": "rsbuild dev --config apps/playground/rsbuild.config.ts",
     "playground:build": "rsbuild build --config apps/playground/rsbuild.config.ts",
     "playground:preview": "rsbuild preview --config apps/playground/rsbuild.config.ts --host 127.0.0.1 --port 4176 --strict-port",
+    "docs:dev": "rspress -c apps/docs/rspress.config.ts",
+    "docs:build": "node scripts/build-docs.mjs",
+    "docs:preview": "rspress preview -c apps/docs/rspress.config.ts",
     "serve": "node scripts/serve-playground.mjs",
     "typecheck": "tsc --noEmit",
     "test": "rstest run",
@@ -86,7 +92,7 @@
     "test:coverage": "node node_modules/@rstest/core/bin/rstest.js run --coverage",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "bun run lint && bun run typecheck && bun run test:coverage && bun run build && bun run test:cli && bun run playground:build"
+    "check": "bun run lint && bun run typecheck && bun run test:coverage && bun run build && bun run test:cli && bun run playground:build && bun run docs:build"
   },
   "peerDependencies": {
     "react": ">=18.2.0 <20",
@@ -102,6 +108,7 @@
     "@biomejs/biome": "2.4.15",
     "@rsbuild/core": "2.1.9",
     "@rsbuild/plugin-react": "2.1.0",
+    "@rspress/core": "2.0.17",
     "@rstest/core": "0.10.6",
     "@rstest/coverage-v8": "0.10.6",
     "@testing-library/jest-dom": "6.9.1",

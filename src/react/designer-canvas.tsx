@@ -1,5 +1,7 @@
 import { type CSSProperties, type DragEvent, type ReactNode, useState } from 'react';
 import type { FormDocument, UiNode } from '../core';
+import type { FormNodeDefinition, FormNodeRegistry } from './node-registry';
+import { SelectControl } from './select-control';
 
 export const catalogDragType = 'application/x-a3s-form-catalog';
 export const nodeDragType = 'application/x-a3s-form-node';
@@ -13,6 +15,7 @@ interface DesignerCanvasProps {
   document: FormDocument;
   selectedId: string;
   viewport: 'desktop' | 'mobile';
+  nodeRegistry?: FormNodeRegistry;
   onSelect: (nodeId: string) => void;
   onCatalogDrop: (catalogId: string, target: CanvasDropTarget) => void;
   onNodeDrop: (nodeId: string, target: CanvasDropTarget) => void;
@@ -76,7 +79,11 @@ function CanvasChildren(props: CanvasTreeProps & { container: UiNode; ancestry?:
         return (
           <div
             className="a3s-form-canvas-item"
-            style={{ gridColumn: `span ${childNode?.width ?? 12}` }}
+            style={
+              {
+                '--a3s-form-item-column': `span ${childNode?.width ?? 12}`,
+              } as CSSProperties
+            }
             key={child}
           >
             <CanvasDropSlot
@@ -103,6 +110,56 @@ function CanvasChildren(props: CanvasTreeProps & { container: UiNode; ancestry?:
   );
 }
 
+function CustomCanvasNode(
+  props: CanvasTreeProps & {
+    node: UiNode;
+    definition: FormNodeDefinition;
+    selected: boolean;
+    ancestry: Set<string>;
+    style: CSSProperties;
+  },
+) {
+  const Design = props.definition.design;
+  const property = props.node.schemaPath?.replace('/properties/', '');
+  const schema = property ? props.document.schema.properties?.[property] : undefined;
+  const required = Boolean(property && props.document.schema.required?.includes(property));
+  const acceptsChildren = props.node.kind === 'section' || props.node.kind === 'group';
+  return (
+    <article
+      className={`a3s-form-design-custom${props.selected ? ' is-selected' : ''}`}
+      data-node-id={props.node.id}
+      data-node-type={props.node.widget}
+      style={props.style}
+      draggable
+      onDragStart={(event) => beginNodeDrag(event, props.node.id)}
+    >
+      <button
+        type="button"
+        className="a3s-form-node-select"
+        aria-label={`选择${props.node.label ?? props.node.id}`}
+        onClick={() => props.onSelect(props.node.id)}
+      />
+      <span className="a3s-form-node-handle" aria-hidden="true">
+        ⋮⋮
+      </span>
+      <div className="a3s-form-design-custom-body">
+        {Design ? (
+          <Design node={props.node} schema={schema} required={required} />
+        ) : (
+          <div className="a3s-form-design-custom-fallback">
+            <strong>{props.node.label ?? props.definition.catalog.label}</strong>
+            <span>{props.definition.catalog.description}</span>
+          </div>
+        )}
+      </div>
+      {acceptsChildren && (
+        <CanvasChildren {...props} container={props.node} ancestry={props.ancestry} />
+      )}
+      {props.selected && <NodeActions actionNode={props.node} {...props} />}
+    </article>
+  );
+}
+
 function CanvasNode(
   props: CanvasTreeProps & { nodeId: string; ancestry?: Set<string> },
 ): ReactNode {
@@ -118,6 +175,20 @@ function CanvasNode(
     '--a3s-form-gap': `${node.gap ?? 24}px`,
     width: '100%',
   } as CSSProperties;
+
+  const extension = node.widget ? props.nodeRegistry?.[node.widget] : undefined;
+  if (extension) {
+    return (
+      <CustomCanvasNode
+        {...props}
+        node={node}
+        definition={extension}
+        selected={selected}
+        ancestry={ancestry}
+        style={style}
+      />
+    );
+  }
 
   if (node.kind === 'section' || node.kind === 'group') {
     if (node.layout === 'tabs')
@@ -373,9 +444,9 @@ function MockControl({ node }: { node: UiNode }) {
     return <textarea disabled placeholder={node.placeholder ?? '请输入'} />;
   if (node.widget === 'select')
     return (
-      <select disabled defaultValue="">
+      <SelectControl disabled defaultValue="">
         <option value="">请选择</option>
-      </select>
+      </SelectControl>
     );
   if (node.widget === 'radio')
     return (
@@ -487,7 +558,16 @@ function CanvasDropSlot(
         handleDrop(event, { containerId: props.containerId, index: props.index }, props);
       }}
     >
-      {props.placement === 'empty' ? <span>拖拽组件到这里，或从左侧点击添加</span> : <i />}
+      {props.placement === 'empty' ? (
+        <span>
+          <i aria-hidden="true">＋</i>
+          <strong>添加第一个组件</strong>
+          <small>从左侧添加字段和布局组件。</small>
+          <em>拖拽组件到这里，或从左侧点击添加</em>
+        </span>
+      ) : (
+        <i />
+      )}
     </button>
   );
 }

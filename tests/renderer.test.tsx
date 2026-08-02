@@ -51,6 +51,32 @@ describe('React FormRenderer', () => {
     await waitFor(() => expect(action).toBe('submit'));
   });
 
+  it('gives native controls consistent labels, required semantics and select framing', async () => {
+    const document = createDocument();
+    const name = document.ui.nodes.find((node) => node.id === 'name');
+    const active = document.ui.nodes.find((node) => node.id === 'active');
+    const role = document.ui.nodes.find((node) => node.id === 'role');
+    if (name) name.description = '请填写证件上的姓名。';
+    if (active) active.label = '显示年龄字段';
+    if (role) role.placeholder = '请选择成员角色';
+
+    render(<RendererHarness document={document} />);
+
+    const nameInput = screen.getByLabelText('姓名') as HTMLInputElement;
+    const roleSelect = screen.getByLabelText('角色') as HTMLSelectElement;
+    expect(nameInput.required).toBe(true);
+    expect(nameInput.getAttribute('aria-describedby')).toContain('-name-help');
+    expect(nameInput.labels?.[0]?.classList.contains('is-required')).toBe(true);
+    expect(screen.getByRole('checkbox', { name: '显示年龄字段' })).toBeTruthy();
+    expect(roleSelect.closest('.a3s-form-select-control')).toBeTruthy();
+    expect(screen.getByRole('option', { name: '请选择成员角色' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    await waitFor(() =>
+      expect(nameInput.getAttribute('aria-describedby')).toContain('-name-error-1'),
+    );
+  });
+
   it('submits once through click and keyboard form submission paths', async () => {
     let actions = 0;
     render(

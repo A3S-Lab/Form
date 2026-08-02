@@ -6,4 +6,5 @@ export * from './core/pointer';
 export * from './core/state';
 export * from './core/template';
 export * from './core/types';
+export * from './core/wasm';
 export * from './workers/compiler-client';

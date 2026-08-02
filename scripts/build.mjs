@@ -1,4 +1,4 @@
-import { rm } from 'node:fs/promises';
+import { copyFile, mkdir, rm } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
 const projectRoot = resolve(import.meta.dirname, '..');
@@ -54,4 +54,9 @@ for (const result of [library, cli]) {
 }
 
 if (process.exitCode) throw new Error('A3S Form build failed.');
+await mkdir(resolve(outputRoot, 'wasm'), { recursive: true });
+await copyFile(
+  resolve(projectRoot, 'src/wasm/sha256.wasm'),
+  resolve(outputRoot, 'wasm/sha256.wasm'),
+);
 console.log(`Built ${library.outputs.length + cli.outputs.length} artifacts in ${outputRoot}`);

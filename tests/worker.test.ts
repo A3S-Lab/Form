@@ -1,4 +1,9 @@
-import { type CompileWorkerRequest, compileForm, compileFormInWorker } from '../src/core';
+import {
+  type CompileWorkerRequest,
+  compileForm,
+  compileFormInWorker,
+  createWorkerRequestId,
+} from '../src/core';
 import { createDocument } from './fixtures';
 
 class FakeWorker {
@@ -44,6 +49,11 @@ class FakeWorker {
 }
 
 describe('cancellable compiler worker client', () => {
+  it('creates secure request ids with a deterministic fallback', () => {
+    expect(createWorkerRequestId(() => 'secure-id')).toBe('secure-id');
+    expect(createWorkerRequestId()).toMatch(/^\d+-0\.\d+$/);
+  });
+
   it('returns matching results and terminates the worker', async () => {
     const worker = new FakeWorker();
     const result = await compileFormInWorker(createDocument(), {

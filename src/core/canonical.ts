@@ -1,4 +1,5 @@
 import type { FormDocument, JsonValue } from './types';
+import { sha256WithWasm } from './wasm';
 
 function canonicalizeInternal(value: unknown): string {
   if (value === null) return 'null';
@@ -30,7 +31,7 @@ function rightRotate(value: number, amount: number): number {
   return (value >>> amount) | (value << (32 - amount));
 }
 
-export function sha256(value: string): string {
+export function sha256JavaScript(value: string): string {
   const maxWord = 2 ** 32;
   const words: number[] = [];
   const ascii = new TextEncoder().encode(value);
@@ -84,6 +85,17 @@ export function sha256(value: string): string {
     for (let index = 0; index < 8; index += 1) hash[index] = (hash[index] + state[index]) >>> 0;
   }
   return hash.map((word) => word.toString(16).padStart(8, '0')).join('');
+}
+
+export function sha256Using(
+  value: string,
+  accelerated: (input: string) => string | undefined,
+): string {
+  return accelerated(value) ?? sha256JavaScript(value);
+}
+
+export function sha256(value: string): string {
+  return sha256Using(value, sha256WithWasm);
 }
 
 export function digestDocument(document: FormDocument): string {

@@ -15,8 +15,20 @@ suite "a3s-form-designer" {
             height = 1100
         }
 
-        wait "ready" {
-            text = "A3S Form · 表单设计器"
+        wait "workspace-ready" {
+            text = "我的表单"
+        }
+
+        expect "sample-form-ready" {
+            text = "新员工入职申请"
+        }
+
+        click "open-sample-form" {
+            target = role("button", "打开新员工入职申请")
+        }
+
+        wait "editor-ready" {
+            text = "表单设计器"
         }
 
         expect "designer-ready" {
@@ -145,6 +157,39 @@ suite "a3s-form-designer" {
             target = css(".a3s-form-page-heading")
         }
 
+        click "add-custom-rating" {
+            target = role("button", "添加评分字段")
+        }
+
+        expect "custom-rating-on-canvas" {
+            visible = css("article[data-node-type='a3s.rating']")
+        }
+
+        fill "configure-custom-rating" {
+            target = css("[aria-label='评分最大星数']")
+            value = "7"
+        }
+
+        click "preview-custom-rating" {
+            target = role("button", "预览")
+        }
+
+        click "choose-custom-rating" {
+            target = css(".playground-rating-node > div > label:nth-child(4)")
+        }
+
+        expect "custom-rating-value" {
+            text = "4 / 7"
+        }
+
+        click "resume-design" {
+            target = role("button", "设计")
+        }
+
+        click "select-root-for-layout" {
+            target = css(".a3s-form-page-heading")
+        }
+
         click "add-two-columns" {
             target = role("button", "添加两栏布局")
         }
@@ -184,6 +229,71 @@ suite "a3s-form-designer" {
 
         expect "document-saved" {
             text = "已保存"
+        }
+    }
+
+    scenario "create-and-restore-local-form" {
+        name = "在线创建多个表单并从浏览器本地恢复"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open-workspace" {
+            url = "http://127.0.0.1:4176/"
+        }
+
+        viewport "workspace-desktop" {
+            width = 1440
+            height = 1000
+        }
+
+        wait "form-list-ready" {
+            text = "我的表单"
+        }
+
+        click "open-create-dialog" {
+            target = css(".playground-workspace-hero .playground-primary")
+        }
+
+        fill "new-form-title" {
+            target = css("[aria-label='新表单名称']")
+            value = "客户满意度调查"
+        }
+
+        fill "new-form-description" {
+            target = css("[aria-label='新表单说明']")
+            value = "收集产品使用反馈"
+        }
+
+        click "create-form" {
+            target = role("button", "创建并开始设计")
+        }
+
+        wait "new-form-editor" {
+            text = "客户满意度调查"
+        }
+
+        expect "blank-canvas-ready" {
+            text = "从左侧添加字段和布局组件。"
+        }
+
+        click "back-to-form-list" {
+            target = role("button", "返回表单列表")
+        }
+
+        expect "new-form-card" {
+            visible = role("button", "打开客户满意度调查")
+        }
+
+        navigate "reload-workspace" {
+            url = "http://127.0.0.1:4176/"
+        }
+
+        wait "restored-local-form" {
+            text = "客户满意度调查"
+        }
+
+        expect "restored-form-card" {
+            visible = role("button", "打开客户满意度调查")
         }
     }
 }

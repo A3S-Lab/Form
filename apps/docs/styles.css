@@ -1,0 +1,27 @@
+:root {
+  --rp-c-brand: #23643d;
+  --rp-c-brand-light: #2f7f50;
+  --rp-c-brand-lighter: #3d9662;
+  --rp-c-brand-dark: #18492c;
+  --rp-c-bg: #f7f8f6;
+  --rp-c-bg-soft: #f0f3ee;
+  --rp-c-divider: #dfe4dd;
+  --rp-radius: 10px;
+}
+
+.rp-home-hero__title {
+  letter-spacing: -0.045em;
+}
+
+.rp-home-feature {
+  border: 1px solid var(--rp-c-divider);
+  box-shadow: 0 1px 2px rgb(20 30 24 / 5%);
+}
+
+.rp-doc-layout__outline {
+  border-left-color: var(--rp-c-divider);
+}
+
+code {
+  font-variant-ligatures: none;
+}

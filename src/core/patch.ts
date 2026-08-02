@@ -3,6 +3,7 @@ import { compileForm, DEFAULT_COMPILER_LIMITS } from './compiler';
 import { decodePointer, getAtPointer } from './pointer';
 import type {
   ApplyPatchResult,
+  CompileOptions,
   FormDocument,
   FormPatch,
   FormPatchOperation,
@@ -90,7 +91,11 @@ function applyOperation(root: Record<string, unknown>, operation: FormPatchOpera
   } else parent[key] = structuredClone(operation.value);
 }
 
-export function applyFormPatch(document: FormDocument, patch: FormPatch): ApplyPatchResult {
+export function applyFormPatch(
+  document: FormDocument,
+  patch: FormPatch,
+  options?: CompileOptions,
+): ApplyPatchResult {
   const conflicts: PatchConflict[] = [];
   if (patch.apiVersion !== 'a3s.dev/form-patch/v1alpha1') {
     conflicts.push({
@@ -157,7 +162,7 @@ export function applyFormPatch(document: FormDocument, patch: FormPatch): ApplyP
   }
   next.revision += 1;
   delete next.digest;
-  const compiled = compileForm(next);
+  const compiled = compileForm(next, options);
   if (!compiled.ok || !compiled.document || !compiled.plan) {
     return {
       ok: false,

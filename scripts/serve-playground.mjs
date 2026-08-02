@@ -1,10 +1,12 @@
-import { createReadStream } from 'node:fs';
+import { createReadStream, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 
 const projectRoot = resolve(import.meta.dirname, '..');
 const publicRoot = resolve(projectRoot, 'playground-dist');
+const runtimeRoot = resolve(projectRoot, '.a3s-form');
+const pidFile = resolve(runtimeRoot, 'playground.pid');
 const host = process.env.A3S_FORM_HOST ?? '127.0.0.1';
 const port = Number(process.env.A3S_FORM_PORT ?? 4176);
 if (!Number.isInteger(port) || port < 1 || port > 65_535)
@@ -61,9 +63,25 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, host, () => {
+  mkdirSync(runtimeRoot, { recursive: true });
+  writeFileSync(pidFile, `${process.pid}\n`, 'ascii');
   console.log(`A3S Form Playground: http://${host}:${port}`);
 });
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => server.close(() => process.exit(0)));
+function removeOwnPidFile() {
+  try {
+    if (Number(readFileSync(pidFile, 'ascii').trim()) === process.pid) unlinkSync(pidFile);
+  } catch {
+    // The PID file may already have been removed by the stop script.
+  }
 }
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () =>
+    server.close(() => {
+      removeOwnPidFile();
+      process.exit(0);
+    }),
+  );
+}
+process.on('exit', removeOwnPidFile);
