@@ -106,11 +106,13 @@ function App() {
   return (
     <div className={`playground-shell is-${surface}`}>
       {surface === 'editor' && (
-        <header className="playground-header">
-          <div className="playground-brand">
+        <header className="playground-header workspace-header">
+          <div className="playground-brand" data-workspace-identity>
             <button
               type="button"
-              className="playground-back"
+              className="playground-back btn"
+              data-size="icon-sm"
+              data-variant="ghost"
               aria-label="返回表单列表"
               onClick={() => setSurface('workspace')}
             >
@@ -132,9 +134,11 @@ function App() {
               </small>
             </span>
           </div>
-          <div className="playground-header-actions">
+          <div className="playground-header-actions" data-workspace-actions>
             <a
-              className="playground-secondary"
+              aria-label="打开产品文档"
+              className="playground-secondary btn"
+              data-variant="secondary"
               href="https://a3s-lab.github.io/Form/"
               target="_blank"
               rel="noreferrer"
@@ -142,11 +146,23 @@ function App() {
               <ProductIcon name="book" size={15} />
               <span>帮助</span>
             </a>
-            <button type="button" className="playground-secondary" onClick={exportJson}>
+            <button
+              aria-label="导出表单"
+              type="button"
+              className="playground-secondary btn"
+              data-variant="secondary"
+              onClick={exportJson}
+            >
               <ProductIcon name="download" size={15} />
               <span>导出</span>
             </button>
-            <button type="button" className="playground-primary" onClick={save}>
+            <button
+              aria-label={saved ? '表单已保存' : '保存表单'}
+              type="button"
+              className="playground-primary btn"
+              data-variant="primary"
+              onClick={save}
+            >
               <ProductIcon name={saved ? 'check' : 'save'} size={15} />
               <span>{saved ? '已保存' : '保存表单'}</span>
             </button>

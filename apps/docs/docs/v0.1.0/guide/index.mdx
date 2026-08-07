@@ -17,13 +17,17 @@ bun run dev
 ## 在 React 中渲染
 
 ```tsx
+import { assertCompiled } from '@a3s-lab/form/core';
 import { FormRenderer } from '@a3s-lab/form/react';
 import '@a3s-lab/form/styles.css';
 
-export function ApplicationForm({ document }) {
-  return <FormRenderer document={document} />;
+export function ApplicationForm({ document, value, onChange }) {
+  const plan = assertCompiled(document);
+  return <FormRenderer plan={plan} value={value} onChange={onChange} />;
 }
 ```
+
+这份样式已经包含 A3S Form 使用的 `@a3s-lab/ui@0.2.0` 组件契约，无需重复导入 A3S UI。
 
 ## 质量检查
 

@@ -28,6 +28,12 @@ const plan = assertCompiled(document);
 
 `FormDesigner` 和 `FormRenderer` 都是受控接口。宿主应保存新文档/值，不要依赖组件内部状态作为业务事实源。
 
+### A3S UI 样式契约
+
+`@a3s-lab/form` 精确依赖已发布的 `@a3s-lab/ui@0.2.0`。构建产物会把预编译 UI 基础样式与 Form 自身样式合并到 `@a3s-lab/form/styles.css`，因此嵌入 Designer 或 Renderer 时只导入这一份样式。
+
+Renderer 使用 `field`、`fieldset`、`input`、`select`、`btn`、`tabs`、`accordion` 和 `card` 契约；Designer 与 Playground 进一步使用 `workspace-header` 和 `app-shell`。原有 `a3s-form-*` 类继续保留，宿主已有的选择器和自动化测试不需要迁移。
+
 ### 自定义表单节点
 
 `FormNodeRegistry` 把一个业务节点的组件目录、默认 Schema、设计态渲染、专属配置面板和运行态渲染收敛为同一份注册定义。文档只保存 registry key 与 JSON 配置，不保存或执行任意 JavaScript。

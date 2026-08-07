@@ -680,17 +680,19 @@ function DesignerToolbar({
   onRedo: () => void;
 }) {
   return (
-    <header className="a3s-form-designer-toolbar">
-      <div className="a3s-form-toolbar-title">
+    <header className="a3s-form-designer-toolbar workspace-header">
+      <div className="a3s-form-toolbar-title" data-workspace-identity>
         <span className="a3s-form-toolbar-copy">
           <strong>表单内容</strong>
           <small>{compiled ? '结构与规则实时生效' : '处理问题后即可预览'}</small>
         </span>
       </div>
-      <div className="a3s-form-toolbar-actions">
+      <div className="a3s-form-toolbar-actions" data-workspace-actions>
         <button
           type="button"
-          className="a3s-form-icon-button"
+          className="a3s-form-icon-button btn"
+          data-size="icon-sm"
+          data-variant="ghost"
           onClick={onUndo}
           disabled={!canUndo}
           aria-label="撤销"
@@ -700,7 +702,9 @@ function DesignerToolbar({
         </button>
         <button
           type="button"
-          className="a3s-form-icon-button"
+          className="a3s-form-icon-button btn"
+          data-size="icon-sm"
+          data-variant="ghost"
           onClick={onRedo}
           disabled={!canRedo}
           aria-label="重做"
@@ -712,7 +716,9 @@ function DesignerToolbar({
         <fieldset className="a3s-form-segmented is-viewport" aria-label="画布尺寸">
           <button
             type="button"
-            className={viewport === 'desktop' ? 'is-active' : ''}
+            className={`btn${viewport === 'desktop' ? ' is-active' : ''}`}
+            data-size="xs"
+            data-variant="ghost"
             aria-pressed={viewport === 'desktop'}
             onClick={() => onViewportChange('desktop')}
           >
@@ -721,7 +727,9 @@ function DesignerToolbar({
           </button>
           <button
             type="button"
-            className={viewport === 'mobile' ? 'is-active' : ''}
+            className={`btn${viewport === 'mobile' ? ' is-active' : ''}`}
+            data-size="xs"
+            data-variant="ghost"
             aria-pressed={viewport === 'mobile'}
             onClick={() => onViewportChange('mobile')}
           >
@@ -732,7 +740,9 @@ function DesignerToolbar({
         <fieldset className="a3s-form-segmented" aria-label="设计器模式">
           <button
             type="button"
-            className={mode === 'design' ? 'is-active' : ''}
+            className={`btn${mode === 'design' ? ' is-active' : ''}`}
+            data-size="xs"
+            data-variant="ghost"
             aria-pressed={mode === 'design'}
             onClick={() => onModeChange('design')}
           >
@@ -741,7 +751,9 @@ function DesignerToolbar({
           </button>
           <button
             type="button"
-            className={mode === 'preview' ? 'is-active' : ''}
+            className={`btn${mode === 'preview' ? ' is-active' : ''}`}
+            data-size="xs"
+            data-variant="ghost"
             aria-pressed={mode === 'preview'}
             onClick={() => onModeChange('preview')}
           >
@@ -790,14 +802,18 @@ function PalettePanel({
       <fieldset className="a3s-form-panel-tabs" aria-label="左侧面板">
         <button
           type="button"
-          className={panel === 'components' ? 'is-active' : ''}
+          className={`btn${panel === 'components' ? ' is-active' : ''}`}
+          data-size="xs"
+          data-variant="ghost"
           onClick={() => onPanelChange('components')}
         >
           组件
         </button>
         <button
           type="button"
-          className={panel === 'outline' ? 'is-active' : ''}
+          className={`btn${panel === 'outline' ? ' is-active' : ''}`}
+          data-size="xs"
+          data-variant="ghost"
           onClick={() => onPanelChange('outline')}
         >
           结构
@@ -808,13 +824,21 @@ function PalettePanel({
           <label className="a3s-form-catalog-search">
             <span aria-hidden="true">⌕</span>
             <input
+              className="input"
               aria-label="搜索组件"
               placeholder="搜索字段或布局"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
             {query && (
-              <button type="button" aria-label="清空组件搜索" onClick={() => setQuery('')}>
+              <button
+                type="button"
+                className="btn"
+                data-size="icon-xs"
+                data-variant="ghost"
+                aria-label="清空组件搜索"
+                onClick={() => setQuery('')}
+              >
                 ×
               </button>
             )}
@@ -830,6 +854,8 @@ function PalettePanel({
                   {section.items.map((item) => (
                     <button
                       type="button"
+                      className="btn"
+                      data-variant="outline"
                       key={item.id}
                       title={item.description}
                       aria-label={`添加${item.label}${item.kind === 'field' || item.kind === 'repeater' ? '字段' : ''}`}
@@ -872,7 +898,9 @@ function PalettePanel({
                 aria-label={`选择${node.label ?? node.id}`}
                 aria-selected={selectedId === node.id}
                 data-node-id={node.id}
-                className={selectedId === node.id ? 'is-selected' : ''}
+                className={`btn${selectedId === node.id ? ' is-selected' : ''}`}
+                data-size="sm"
+                data-variant="ghost"
                 style={{ paddingLeft: `${12 + nodeDepth(document, node.id) * 13}px` }}
                 key={node.id}
                 onClick={() => onSelect(node.id)}
@@ -920,21 +948,27 @@ function Inspector(props: {
       <fieldset className="a3s-form-panel-tabs is-inspector" aria-label="属性面板标签">
         <button
           type="button"
-          className={props.panel === 'properties' ? 'is-active' : ''}
+          className={`btn${props.panel === 'properties' ? ' is-active' : ''}`}
+          data-size="xs"
+          data-variant="ghost"
           onClick={() => props.onPanelChange('properties')}
         >
           属性
         </button>
         <button
           type="button"
-          className={props.panel === 'validation' ? 'is-active' : ''}
+          className={`btn${props.panel === 'validation' ? ' is-active' : ''}`}
+          data-size="xs"
+          data-variant="ghost"
           onClick={() => props.onPanelChange('validation')}
         >
           校验
         </button>
         <button
           type="button"
-          className={props.panel === 'advanced' ? 'is-active' : ''}
+          className={`btn${props.panel === 'advanced' ? ' is-active' : ''}`}
+          data-size="xs"
+          data-variant="ghost"
           onClick={() => props.onPanelChange('advanced')}
         >
           高级
@@ -1145,7 +1179,12 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
         </Control>
       )}
       {(selected.layout === 'tabs' || selected.layout === 'collapse') && (
-        <button type="button" className="a3s-form-secondary-action" onClick={props.onAddLayoutItem}>
+        <button
+          type="button"
+          className="a3s-form-secondary-action btn"
+          data-variant="secondary"
+          onClick={props.onAddLayoutItem}
+        >
           {selected.layout === 'tabs' ? '添加标签页' : '添加折叠面板'}
         </button>
       )}
@@ -1170,10 +1209,20 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
         </section>
       )}
       <div className="a3s-form-inspector-actions">
-        <button type="button" className="a3s-form-secondary-action" onClick={props.onDuplicate}>
+        <button
+          type="button"
+          className="a3s-form-secondary-action btn"
+          data-variant="secondary"
+          onClick={props.onDuplicate}
+        >
           复制节点
         </button>
-        <button type="button" className="a3s-form-danger" onClick={props.onRemove}>
+        <button
+          type="button"
+          className="a3s-form-danger btn"
+          data-variant="destructive"
+          onClick={props.onRemove}
+        >
           {selected.kind === 'field' || selected.kind === 'repeater' ? '删除字段' : '删除节点'}
         </button>
       </div>
@@ -1290,7 +1339,12 @@ function PatchPanel({
         onChange={(event) => onTextChange(event.target.value)}
         placeholder={`{"apiVersion":"a3s.dev/form-patch/v1alpha1","baseRevision":${document.revision},"operations":[]}`}
       />
-      <button type="button" className="a3s-form-primary-action" onClick={onReview}>
+      <button
+        type="button"
+        className="a3s-form-primary-action btn"
+        data-variant="primary"
+        onClick={onReview}
+      >
         校验并应用
       </button>
       {patchMessage && (
@@ -1304,7 +1358,7 @@ function PatchPanel({
 
 function Control({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="a3s-form-control">
+    <div className="a3s-form-control field">
       <span>
         {label}
         {hint && <small>{hint}</small>}
@@ -1327,8 +1381,11 @@ function Toggle({
     <label className="a3s-form-toggle">
       <span>{label}</span>
       <input
+        className="input"
         type="checkbox"
+        role="switch"
         aria-label={label}
+        aria-checked={checked}
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
       />

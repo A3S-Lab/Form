@@ -538,8 +538,15 @@ a {
   }
 
   .playground-header-actions > :is(button, a) {
-    width: 33px;
+    width: 44px;
+    height: 44px;
     padding: 0;
+  }
+
+  .playground-back {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
   }
 
   .playground-header-actions > :is(button, a) > span {

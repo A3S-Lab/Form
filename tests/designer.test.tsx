@@ -54,8 +54,16 @@ describe('React FormDesigner', () => {
 
   it('adds, configures, previews, deletes and restores fields in Chinese', () => {
     render(<DesignerHarness />);
-    expect(screen.getByTestId('form-designer')).toBeTruthy();
+    const designer = screen.getByTestId('form-designer');
+    expect(designer).toBeTruthy();
     expect(screen.getByText(/编译通过/)).toBeTruthy();
+    expect(designer.querySelector('.workspace-header')).toBeTruthy();
+    expect(designer.querySelector('[data-workspace-identity]')).toBeTruthy();
+    expect(designer.querySelector('[data-workspace-actions]')).toBeTruthy();
+    const undo = screen.getByRole('button', { name: '撤销' });
+    expect(undo.classList.contains('btn')).toBe(true);
+    expect(undo.getAttribute('data-variant')).toBe('ghost');
+    expect(screen.getByLabelText('字段标题').closest('.field')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /单行文本/ }));
     expect(screen.getByTestId('designer-document').textContent).toContain('field-1');
@@ -66,7 +74,7 @@ describe('React FormDesigner', () => {
     fireEvent.change(screen.getByLabelText('占位提示'), { target: { value: '手机或座机' } });
     fireEvent.change(screen.getByLabelText('栅格宽度'), { target: { value: '6' } });
     fireEvent.click(screen.getByRole('button', { name: '校验' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '必填字段' }));
+    fireEvent.click(screen.getByRole('switch', { name: '必填字段' }));
     expect(screen.getByRole('button', { name: /联系电话/ })).toBeTruthy();
     expect(screen.getByTestId('designer-document').textContent).toContain('请留下联系方式');
 
@@ -296,9 +304,9 @@ describe('React FormDesigner', () => {
       target: { value: '研发部\n产品部\n运营部' },
     });
     fireEvent.click(screen.getByRole('button', { name: '校验' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '必填字段' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '只读字段' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '默认隐藏' }));
+    fireEvent.click(screen.getByRole('switch', { name: '必填字段' }));
+    fireEvent.click(screen.getByRole('switch', { name: '只读字段' }));
+    fireEvent.click(screen.getByRole('switch', { name: '默认隐藏' }));
     fireEvent.change(screen.getByLabelText('最小字符数'), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText('最大字符数'), { target: { value: '20' } });
     document = currentDocument();
@@ -518,7 +526,7 @@ describe('React FormDesigner', () => {
       }),
     );
     fireEvent.click(screen.getByRole('button', { name: '校验' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '必填字段' }));
+    fireEvent.click(screen.getByRole('switch', { name: '必填字段' }));
     fireEvent.click(screen.getByRole('button', { name: '属性' }));
     fireEvent.click(screen.getByRole('button', { name: '删除字段' }));
     expect(currentDocument().ui.nodes.map((node) => node.id)).toEqual(['root']);
@@ -626,7 +634,7 @@ describe('React FormDesigner', () => {
     expect((screen.getByLabelText('栅格宽度') as HTMLSelectElement).value).toBe('12');
 
     fireEvent.click(screen.getByRole('button', { name: '校验' }));
-    const required = screen.getByRole('checkbox', { name: '必填字段' });
+    const required = screen.getByRole('switch', { name: '必填字段' });
     fireEvent.click(required);
     expect(screen.getByTestId('designer-document').textContent).toContain('"required":["name"]');
     fireEvent.click(required);

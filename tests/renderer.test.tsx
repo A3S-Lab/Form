@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { assertCompiled, type FormDocument, type JsonObject } from '../src/core';
-import { FormRenderer, type FormWidgetProps } from '../src/react';
+import {
+  defineFormNodeRegistry,
+  type FormNodeRenderProps,
+  FormRenderer,
+  type FormWidgetProps,
+} from '../src/react';
 import { createDocument } from './fixtures';
 
 function RendererHarness({
@@ -44,7 +49,7 @@ describe('React FormRenderer', () => {
 
     fireEvent.change(screen.getByLabelText('姓名'), { target: { value: '张三' } });
     expect(screen.getByTestId('renderer-value').textContent).toContain('"name":"张三"');
-    fireEvent.click(screen.getByRole('checkbox', { name: /启用/ }));
+    fireEvent.click(screen.getByRole('switch', { name: /启用/ }));
     expect(await screen.findByLabelText('年龄')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('年龄'), { target: { value: '24' } });
     fireEvent.click(screen.getByRole('button', { name: '提交' }));
@@ -64,14 +69,24 @@ describe('React FormRenderer', () => {
 
     const nameInput = screen.getByLabelText('姓名') as HTMLInputElement;
     const roleSelect = screen.getByLabelText('角色') as HTMLSelectElement;
+    const activeSwitch = screen.getByRole('switch', {
+      name: '显示年龄字段',
+    }) as HTMLInputElement;
     expect(nameInput.required).toBe(true);
     expect(nameInput.getAttribute('aria-describedby')).toContain('-name-help');
     expect(nameInput.labels?.[0]?.classList.contains('is-required')).toBe(true);
-    expect(screen.getByRole('checkbox', { name: '显示年龄字段' })).toBeTruthy();
+    expect(nameInput.classList.contains('input')).toBe(true);
+    expect(nameInput.closest('.field')).toBeTruthy();
+    expect(activeSwitch.classList.contains('input')).toBe(true);
+    expect(roleSelect.classList.contains('select')).toBe(true);
     expect(roleSelect.closest('.a3s-form-select-control')).toBeTruthy();
     expect(screen.getByRole('option', { name: '请选择成员角色' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    const submit = screen.getByRole('button', { name: '提交' });
+    expect(submit.classList.contains('btn')).toBe(true);
+    expect(submit.getAttribute('data-variant')).toBe('primary');
+
+    fireEvent.click(submit);
     await waitFor(() =>
       expect(nameInput.getAttribute('aria-describedby')).toContain('-name-error-1'),
     );
@@ -165,6 +180,86 @@ describe('React FormRenderer', () => {
     expect(customButton.textContent).toBe('custom-value');
   });
 
+  it('projects required, invalid and locale states through A3S UI contracts', () => {
+    const document = createDocument();
+    document.metadata.locale = 'en-US';
+    document.schema.required = ['name', 'active', 'tags', 'rating'];
+    document.schema.properties = {
+      ...document.schema.properties,
+      tags: { type: 'array', items: { type: 'string' } },
+      rating: { type: 'number' },
+      notes: { type: 'string' },
+      choice: { type: 'string' },
+    };
+    document.ui.nodes.push(
+      { id: 'tags', kind: 'repeater', label: 'Tags', schemaPath: '/properties/tags' },
+      {
+        id: 'rating',
+        kind: 'field',
+        label: 'Rating',
+        schemaPath: '/properties/rating',
+        widget: 'company.rating',
+      },
+      { id: 'notes', kind: 'field', schemaPath: '/properties/notes', widget: 'textarea' },
+      {
+        id: 'choice',
+        kind: 'field',
+        schemaPath: '/properties/choice',
+        widget: 'select',
+        options: [{ label: 'First', value: 'first' }],
+      },
+    );
+    document.ui.nodes[0].children?.push('tags', 'rating', 'notes', 'choice');
+    const registry = defineFormNodeRegistry({
+      'company.rating': {
+        kind: 'field',
+        catalog: {
+          section: 'business',
+          sectionLabel: 'Business',
+          label: 'Rating',
+          description: 'Numeric rating',
+          glyph: 'R',
+        },
+        render: ({ id, value, onChange }: FormNodeRenderProps) => (
+          <input
+            id={id}
+            aria-label="Rating"
+            value={String(value ?? '')}
+            onChange={(event) => onChange(Number(event.target.value))}
+          />
+        ),
+      },
+    });
+    const plan = assertCompiled(document, {
+      capabilities: { widgets: Object.keys(registry) },
+    });
+
+    const { container } = render(
+      <FormRenderer
+        plan={plan}
+        value={{}}
+        onChange={() => undefined}
+        errors={[
+          { path: 'tags', code: 'tags.required', message: 'Add a tag.' },
+          { path: 'rating', code: 'rating.required', message: 'Choose a rating.' },
+        ]}
+        nodeRegistry={registry}
+      />,
+    );
+
+    expect(container.querySelector('form')?.lang).toBe('en-US');
+    expect(screen.getByRole('switch', { name: '启用' }).hasAttribute('required')).toBe(true);
+    expect(screen.getByRole('group', { name: 'Tags' }).classList.contains('is-invalid')).toBe(true);
+    expect(
+      screen.getByRole('group', { name: 'Tags' }).querySelector('legend')?.className,
+    ).toContain('is-required');
+    const rating = screen.getByLabelText('Rating').closest('.a3s-form-custom-node');
+    expect(rating?.classList.contains('field')).toBe(true);
+    expect(rating?.getAttribute('data-invalid')).toBe('true');
+    expect(screen.getByLabelText('notes').classList.contains('textarea')).toBe(true);
+    expect(screen.getByLabelText('choice').classList.contains('select')).toBe(true);
+  });
+
   it('renders every native control, nested layout and controlled repeater edits', () => {
     const document = createDocument();
     document.rules = [];
@@ -245,7 +340,7 @@ describe('React FormRenderer', () => {
     expect(screen.getByText('静态帮助内容')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('简介'), { target: { value: '新简介' } });
     fireEvent.change(screen.getByLabelText('年龄'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: '启用' }));
+    fireEvent.click(screen.getByRole('switch', { name: '启用' }));
     fireEvent.change(screen.getByLabelText('角色'), { target: { value: 'admin' } });
     fireEvent.click(screen.getByRole('radio', { name: '草稿' }));
     fireEvent.change(screen.getByLabelText('标签 1'), { target: { value: '更新' } });
@@ -339,10 +434,19 @@ describe('React FormRenderer', () => {
       },
       { id: 'column-a-content', kind: 'content', content: '左栏' },
       { id: 'column-b-content', kind: 'content', content: '右栏' },
+      {
+        id: 'card',
+        kind: 'group',
+        label: '卡片内容',
+        layout: 'card',
+        children: ['card-content'],
+      },
+      { id: 'card-content', kind: 'content', content: '卡片正文' },
     );
-    document.ui.nodes[0].children?.push('tabs', 'collapse', 'columns');
+    document.ui.nodes[0].children?.push('tabs', 'collapse', 'columns', 'card');
     render(<RendererHarness document={document} />);
-    expect(screen.getByRole('tablist', { name: '分类资料' })).toBeTruthy();
+    const tablist = screen.getByRole('tablist', { name: '分类资料' });
+    expect(tablist.closest('.tabs')).toBeTruthy();
     expect(screen.getByText('基本页内容')).toBeTruthy();
     expect(screen.queryByText('补充页内容')).toBeNull();
     expect(screen.getByText('下一部分')).toBeTruthy();
@@ -356,6 +460,8 @@ describe('React FormRenderer', () => {
     expect(screen.getByText('权限内容')).toBeTruthy();
     expect(screen.getByText('左栏')).toBeTruthy();
     expect(screen.getByText('右栏')).toBeTruthy();
+    expect(screen.getByText('通知设置').closest('.accordion')).toBeTruthy();
+    expect(screen.getByText('卡片正文').closest('.card')).toBeTruthy();
   });
 
   it('uses host actions and renders externally controlled errors and read-only state', async () => {

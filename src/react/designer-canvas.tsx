@@ -126,7 +126,7 @@ function CustomCanvasNode(
   const acceptsChildren = props.node.kind === 'section' || props.node.kind === 'group';
   return (
     <article
-      className={`a3s-form-design-custom${props.selected ? ' is-selected' : ''}`}
+      className={`a3s-form-design-custom card${props.selected ? ' is-selected' : ''}`}
       data-node-id={props.node.id}
       data-node-type={props.node.widget}
       style={props.style}
@@ -198,7 +198,7 @@ function CanvasNode(
     return (
       <fieldset
         aria-label={node.label ?? node.id}
-        className={`a3s-form-design-container is-${node.layout ?? 'flow'}${selected ? ' is-selected' : ''}`}
+        className={`a3s-form-design-container fieldset is-${node.layout ?? 'flow'}${node.layout === 'card' ? ' card' : ''}${selected ? ' is-selected' : ''}`}
         data-node-id={node.id}
         style={style}
         draggable
@@ -219,7 +219,7 @@ function CanvasNode(
   const required = Boolean(valuePath && props.document.schema.required?.includes(valuePath));
   return (
     <article
-      className={`a3s-form-design-field${selected ? ' is-selected' : ''}`}
+      className={`a3s-form-design-field card${selected ? ' is-selected' : ''}`}
       data-node-id={node.id}
       style={style}
       draggable
@@ -238,7 +238,7 @@ function CanvasNode(
         <FieldShell node={node} required={required}>
           <div className="a3s-form-mock-repeater">
             <span>列表项</span>
-            <button type="button" disabled>
+            <button type="button" className="btn" data-variant="secondary" disabled>
               添加一项
             </button>
           </div>
@@ -270,7 +270,7 @@ function TabbedContainer(
   return (
     <fieldset
       aria-label={props.node.label ?? props.node.id}
-      className={`a3s-form-design-container is-tabs${props.selected ? ' is-selected' : ''}`}
+      className={`a3s-form-design-container fieldset tabs is-tabs${props.selected ? ' is-selected' : ''}`}
       style={{ width: '100%' }}
       data-node-id={props.node.id}
       draggable
@@ -316,14 +316,14 @@ function CollapseContainer(
   return (
     <fieldset
       aria-label={props.node.label ?? props.node.id}
-      className={`a3s-form-design-container is-collapse${props.selected ? ' is-selected' : ''}`}
+      className={`a3s-form-design-container fieldset is-collapse${props.selected ? ' is-selected' : ''}`}
       style={{ width: '100%' }}
       data-node-id={props.node.id}
       draggable
       onDragStart={(event) => beginNodeDrag(event, props.node.id)}
     >
       <ContainerHeading {...props} node={props.node} selected={props.selected} />
-      <div className="a3s-form-design-collapse-list">
+      <div className="a3s-form-design-collapse-list accordion">
         {panels.map((panel) => (
           <details open key={panel.id}>
             <summary>
@@ -428,7 +428,7 @@ function FieldShell({
   children: ReactNode;
 }) {
   return (
-    <div className="a3s-form-mock-field">
+    <div className="a3s-form-mock-field field">
       <div className="a3s-form-mock-label">
         {node.label ?? node.id}
         {required && <em>*</em>}
@@ -441,7 +441,7 @@ function FieldShell({
 
 function MockControl({ node }: { node: UiNode }) {
   if (node.widget === 'textarea')
-    return <textarea disabled placeholder={node.placeholder ?? '请输入'} />;
+    return <textarea className="textarea" disabled placeholder={node.placeholder ?? '请输入'} />;
   if (node.widget === 'select')
     return (
       <SelectControl disabled defaultValue="">
@@ -468,6 +468,7 @@ function MockControl({ node }: { node: UiNode }) {
     );
   return (
     <input
+      className="input"
       disabled
       type={
         node.widget === 'number' ||
@@ -487,6 +488,9 @@ function NodeActions(props: CanvasTreeProps & { actionNode: UiNode }) {
     <div className="a3s-form-node-actions">
       <button
         type="button"
+        className="btn"
+        data-size="icon-xs"
+        data-variant="ghost"
         aria-label="上移节点"
         title="上移"
         onClick={(event) => {
@@ -498,6 +502,9 @@ function NodeActions(props: CanvasTreeProps & { actionNode: UiNode }) {
       </button>
       <button
         type="button"
+        className="btn"
+        data-size="icon-xs"
+        data-variant="ghost"
         aria-label="下移节点"
         title="下移"
         onClick={(event) => {
@@ -509,6 +516,9 @@ function NodeActions(props: CanvasTreeProps & { actionNode: UiNode }) {
       </button>
       <button
         type="button"
+        className="btn"
+        data-size="icon-xs"
+        data-variant="ghost"
         aria-label="复制节点"
         title="复制"
         onClick={(event) => {
@@ -520,6 +530,9 @@ function NodeActions(props: CanvasTreeProps & { actionNode: UiNode }) {
       </button>
       <button
         type="button"
+        className="btn"
+        data-size="icon-xs"
+        data-variant="destructive"
         aria-label="删除节点"
         title="删除"
         onClick={(event) => {

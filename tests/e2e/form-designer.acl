@@ -23,16 +23,36 @@ suite "a3s-form-designer" {
             text = "新员工入职申请"
         }
 
+        expect "workspace-uses-a3s-shell" {
+            visible = css("main.app-shell[data-navigation='expanded'] [data-app-main]")
+        }
+
         click "open-sample-form" {
             target = role("button", "打开新员工入职申请")
         }
 
         wait "editor-ready" {
-            text = "表单设计器"
+            text = "表单内容"
         }
 
         expect "designer-ready" {
             text = "● 编译通过"
+        }
+
+        expect "editor-uses-a3s-workspace-header" {
+            visible = css(".playground-header.workspace-header")
+        }
+
+        expect "designer-uses-a3s-workspace-header" {
+            visible = css(".a3s-form-designer-toolbar.workspace-header")
+        }
+
+        expect "export-action-has-accessible-name" {
+            visible = css("button[aria-label='导出表单']")
+        }
+
+        expect "save-action-has-accessible-name" {
+            visible = css("button[aria-label='保存表单']")
         }
 
         click "add-number" {
@@ -86,6 +106,14 @@ suite "a3s-form-designer" {
 
         expect "preview-updated" {
             text = "工龄"
+        }
+
+        expect "renderer-uses-a3s-fields" {
+            visible = css(".a3s-form-renderer .field .input")
+        }
+
+        expect "renderer-uses-a3s-actions" {
+            visible = css(".a3s-form-renderer .btn[data-variant='primary']")
         }
 
         click "submit-empty" {
@@ -251,7 +279,7 @@ suite "a3s-form-designer" {
         }
 
         click "open-create-dialog" {
-            target = css(".playground-workspace-hero .playground-primary")
+            target = role("button", "新建表单")
         }
 
         fill "new-form-title" {
@@ -281,7 +309,7 @@ suite "a3s-form-designer" {
         }
 
         expect "new-form-card" {
-            visible = role("button", "打开客户满意度调查")
+            visible = css("[aria-label='打开客户满意度调查']")
         }
 
         navigate "reload-workspace" {
@@ -293,7 +321,7 @@ suite "a3s-form-designer" {
         }
 
         expect "restored-form-card" {
-            visible = role("button", "打开客户满意度调查")
+            visible = css("[aria-label='打开客户满意度调查']")
         }
     }
 }

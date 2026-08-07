@@ -1,10 +1,10 @@
 # 开发预览
 
-下一版本将继续围绕以下边界演进：
+当前开发版已经完成：
 
-- 更丰富的布局约束和响应式画布；
-- 自定义节点包的发现、版本兼容与沙箱策略；
-- 面向 a3s-cloud 的协同编辑和发布适配器；
-- 更多适合 WASM 的确定性编译热路径。
+- Designer、Renderer 与 Playground 统一使用已发布的 `@a3s-lab/ui@0.2.0`；
+- `field`、`fieldset`、`input`、`select`、`btn`、`tabs`、`accordion`、`card`、`app-shell` 与 `workspace-header` 都落在真实组件 DOM 上；
+- `@a3s-lab/form/styles.css` 提供自包含样式，宿主不用重复导入 A3S UI；
+- 原有 `a3s-form-*` 类和受控接口保持不变。
 
-未进入稳定版本前，这些能力不构成兼容性承诺。
+这组变更仍位于 `next`，进入稳定版本前不构成新的兼容性承诺。

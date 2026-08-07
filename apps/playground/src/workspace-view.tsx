@@ -115,14 +115,25 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   const collectionTitle = collection === 'workflow' ? '工作流节点示例' : '最近表单';
 
   return (
-    <main className={`playground-workspace ${sidebarOpen ? 'sidebar-visible' : ''}`}>
+    <main
+      className={`playground-workspace app-shell ${sidebarOpen ? 'sidebar-visible' : ''}`}
+      data-navigation={sidebarOpen ? 'expanded' : 'hidden'}
+      data-mobile-navigation={sidebarOpen ? 'open' : 'closed'}
+    >
       {sidebarOpen && (
-        <aside className="playground-workspace-sidebar" aria-label="A3S Form 导航" inert={creating}>
+        <aside
+          className="playground-workspace-sidebar"
+          aria-label="A3S Form 导航"
+          data-app-navigation
+          inert={creating}
+        >
           <header className="playground-sidebar-product-header">
             <strong>表单</strong>
             <button
               type="button"
-              className="playground-icon-button"
+              className="playground-icon-button btn"
+              data-size="icon-sm"
+              data-variant="ghost"
               aria-label="收起表单侧边栏"
               title="收起侧边栏"
               onClick={() => setSidebarOpen(false)}
@@ -150,7 +161,8 @@ export function WorkspaceView(props: WorkspaceViewProps) {
             <span className="playground-sidebar-label">产品</span>
             <button
               type="button"
-              className={collection === 'all' ? 'is-active' : ''}
+              className={`btn${collection === 'all' ? ' is-active' : ''}`}
+              data-variant="ghost"
               aria-current={collection === 'all' ? 'page' : undefined}
               onClick={() => showCollection('all')}
             >
@@ -160,7 +172,8 @@ export function WorkspaceView(props: WorkspaceViewProps) {
             </button>
             <button
               type="button"
-              className={collection === 'workflow' ? 'is-active' : ''}
+              className={`btn${collection === 'workflow' ? ' is-active' : ''}`}
+              data-variant="ghost"
               aria-current={collection === 'workflow' ? 'page' : undefined}
               onClick={() => showCollection('workflow')}
             >
@@ -177,13 +190,23 @@ export function WorkspaceView(props: WorkspaceViewProps) {
 
           <section className="playground-sidebar-create" aria-label="快速新建">
             <span className="playground-sidebar-label">快速新建</span>
-            <button type="button" onClick={() => openCreate('blank')}>
+            <button
+              type="button"
+              className="btn"
+              data-variant="ghost"
+              onClick={() => openCreate('blank')}
+            >
               <span className="playground-quick-create-icon">
                 <ProductIcon name="file" size={15} />
               </span>
               <span className="playground-sidebar-item-label">空白表单</span>
             </button>
-            <button type="button" onClick={() => openCreate('onboarding')}>
+            <button
+              type="button"
+              className="btn"
+              data-variant="ghost"
+              onClick={() => openCreate('onboarding')}
+            >
               <span className="playground-quick-create-icon template">
                 <ProductIcon name="form" size={15} />
               </span>
@@ -215,14 +238,16 @@ export function WorkspaceView(props: WorkspaceViewProps) {
         />
       )}
 
-      <section className="playground-workspace-main" inert={creating}>
-        <div className="playground-workspace-content">
+      <section className="playground-workspace-main" data-app-main inert={creating}>
+        <div className="playground-workspace-content" data-app-content>
           <header className="playground-home-header">
             <div className="playground-home-title">
               {!sidebarOpen && (
                 <button
                   type="button"
-                  className="playground-icon-button playground-sidebar-open"
+                  className="playground-icon-button playground-sidebar-open btn"
+                  data-size="icon-sm"
+                  data-variant="ghost"
                   aria-label="展开表单侧边栏"
                   title="展开侧边栏"
                   onClick={() => setSidebarOpen(true)}
@@ -240,17 +265,30 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 <ProductIcon name="search" size={15} />
                 <span className="sr-only">搜索表单</span>
                 <input
+                  className="input"
                   value={query}
                   placeholder="搜索表单"
                   onChange={(event) => setQuery(event.target.value)}
                 />
                 {query && (
-                  <button type="button" aria-label="清空搜索" onClick={() => setQuery('')}>
+                  <button
+                    type="button"
+                    className="btn"
+                    data-size="icon-xs"
+                    data-variant="ghost"
+                    aria-label="清空搜索"
+                    onClick={() => setQuery('')}
+                  >
                     <ProductIcon name="close" size={13} />
                   </button>
                 )}
               </label>
-              <button type="button" className="playground-primary" onClick={() => openCreate()}>
+              <button
+                type="button"
+                className="playground-primary btn"
+                data-variant="primary"
+                onClick={() => openCreate()}
+              >
                 <ProductIcon name="plus" size={15} />
                 新建表单
               </button>
@@ -287,7 +325,12 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 <span>{visibleForms.length} 份表单</span>
               </div>
               {(query || collection !== 'all') && (
-                <button type="button" className="playground-text-button" onClick={clearFilters}>
+                <button
+                  type="button"
+                  className="playground-text-button btn"
+                  data-variant="link"
+                  onClick={clearFilters}
+                >
                   查看全部
                   <ProductIcon name="arrow-right" size={13} />
                 </button>
@@ -295,7 +338,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
             </div>
 
             {!props.storageAvailable && (
-              <div className="playground-storage-warning" role="alert">
+              <div className="playground-storage-warning alert" role="alert">
                 <ProductIcon name="database" size={16} />
                 浏览器拒绝了本地存储访问，本次修改只能保留到页面关闭前。
               </div>
@@ -312,13 +355,18 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 ))}
               </div>
             ) : (
-              <div className="playground-search-empty">
+              <div className="playground-search-empty empty">
                 <span>
                   <ProductIcon name="search" size={21} />
                 </span>
                 <strong>{query ? `没有找到“${query}”` : '这个分类暂时没有表单'}</strong>
                 <p>{query ? '换一个关键词试试。' : '返回全部表单，或从上方模板新建。'}</p>
-                <button type="button" className="playground-secondary" onClick={clearFilters}>
+                <button
+                  type="button"
+                  className="playground-secondary btn"
+                  data-variant="secondary"
+                  onClick={clearFilters}
+                >
                   查看全部表单
                 </button>
               </div>
@@ -336,7 +384,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
             onClick={() => setCreating(false)}
           />
           <section
-            className="playground-dialog"
+            className="playground-dialog card"
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-form-title"
@@ -351,7 +399,14 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                   <small>选择起点，命名后进入设计器</small>
                 </span>
               </div>
-              <button type="button" aria-label="关闭新建表单" onClick={() => setCreating(false)}>
+              <button
+                type="button"
+                className="btn"
+                data-size="icon-sm"
+                data-variant="ghost"
+                aria-label="关闭新建表单"
+                onClick={() => setCreating(false)}
+              >
                 <ProductIcon name="close" size={17} />
               </button>
             </header>
@@ -361,7 +416,8 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 <div className="playground-template-options">
                   <button
                     type="button"
-                    className={template === 'blank' ? 'is-selected' : ''}
+                    className={`btn${template === 'blank' ? ' is-selected' : ''}`}
+                    data-variant="outline"
                     aria-pressed={template === 'blank'}
                     onClick={() => chooseTemplate('blank')}
                   >
@@ -376,7 +432,8 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                   </button>
                   <button
                     type="button"
-                    className={template === 'onboarding' ? 'is-selected' : ''}
+                    className={`btn${template === 'onboarding' ? ' is-selected' : ''}`}
+                    data-variant="outline"
                     aria-pressed={template === 'onboarding'}
                     onClick={() => chooseTemplate('onboarding')}
                   >
@@ -392,11 +449,12 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 </div>
               </fieldset>
               <div className="playground-dialog-fields">
-                <label>
+                <label className="field">
                   <span>
                     表单名称 <em>*</em>
                   </span>
                   <input
+                    className="input"
                     ref={titleInputRef}
                     aria-label="新表单名称"
                     placeholder="例如：客户满意度调查"
@@ -407,11 +465,12 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                     }}
                   />
                 </label>
-                <label>
+                <label className="field">
                   <span>
                     表单说明 <small>选填</small>
                   </span>
                   <textarea
+                    className="textarea"
                     aria-label="新表单说明"
                     placeholder="说明这个表单用于收集什么信息"
                     value={description}
@@ -427,14 +486,16 @@ export function WorkspaceView(props: WorkspaceViewProps) {
             <footer>
               <button
                 type="button"
-                className="playground-secondary"
+                className="playground-secondary btn"
+                data-variant="secondary"
                 onClick={() => setCreating(false)}
               >
                 取消
               </button>
               <button
                 type="button"
-                className="playground-primary"
+                className="playground-primary btn"
+                data-variant="primary"
                 disabled={!title.trim()}
                 onClick={create}
               >
@@ -461,7 +522,7 @@ function TemplateCard({
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="playground-template-card" onClick={onClick}>
+    <button type="button" className="playground-template-card card" onClick={onClick}>
       <span className="playground-template-preview" aria-hidden="true">
         <span className="playground-template-sheet">
           <ProductIcon name={icon} size={22} />
@@ -485,7 +546,7 @@ function FormCard({ record, onOpen }: { record: PlaygroundFormRecord; onOpen: ()
   return (
     <button
       type="button"
-      className="playground-form-card"
+      className="playground-form-card card"
       aria-label={`打开${record.document.metadata.title}`}
       onClick={onOpen}
     >

@@ -1,3 +1,5 @@
+@import "@a3s-lab/ui/cdn.css";
+
 .a3s-form-designer,
 .a3s-form-renderer {
   --a3s-form-bg: var(--a3s-bg, #f7f7f8);
@@ -111,6 +113,7 @@
   width: 100%;
   min-width: 0;
   padding-right: 38px;
+  background-image: none;
   cursor: pointer;
 }
 
@@ -496,7 +499,6 @@
   border-radius: 12px;
   background: var(--a3s-form-panel);
   box-shadow: 0 8px 24px rgb(20 27 43 / 6%);
-  transition: width 160ms ease;
 }
 
 .a3s-form-design-stage.is-mobile .a3s-form-design-page,

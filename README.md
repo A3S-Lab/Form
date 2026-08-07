@@ -78,8 +78,8 @@ A basic schema renderer only draws inputs. A3S Form gives design, preview, runti
 
 | Surface | Implemented capabilities |
 | --- | --- |
-| **Form Designer** | A3S Office component styling, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, live preview, undo/redo, and compiler diagnostics |
-| **Form Renderer** | Controlled values, field validation, visibility/enabled rules, data-source options, action callbacks, read-only and external-error states, custom nodes, and repeaters |
+| **Form Designer** | Published A3S UI component contracts, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, live preview, undo/redo, and compiler diagnostics |
+| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, validation, rules, data sources, custom nodes, and repeaters |
 | **Form Compiler** | Input boundaries, semantic validation, dependency-cycle detection, capability checks, canonical SHA-256, immutable `FormPlan`, and a cancellable Worker |
 | **Agent Interface** | JSON CLI, revision-bound `FormPatch`, `$a3s-form` skill, machine-readable diagnostics, and atomic changes |
 
@@ -109,6 +109,8 @@ const plan = assertCompiled(document);
   onAction={handleAction}
 />
 ```
+
+`@a3s-lab/form/styles.css` bundles the precompiled `@a3s-lab/ui@0.2.0` contract used by the Designer, Renderer, and Playground. A host only needs the Form stylesheet for these surfaces; no second A3S UI stylesheet is required.
 
 <a id="architecture"></a>
 
@@ -180,7 +182,7 @@ Supported exports:
 | `@a3s-lab/form/cloud` | A3S Cloud host adapter |
 | `@a3s-lab/form/workflow` | FormRef, interaction request, and submission validation |
 | `@a3s-lab/form/compiler.worker.js` | Cancellable browser compiler Worker |
-| `@a3s-lab/form/styles.css` | Shared A3S Office-aligned tokens, control density, and interaction states |
+| `@a3s-lab/form/styles.css` | Self-contained A3S UI 0.2.0 foundation plus Form-specific layout and interaction states |
 
 See the [Integration Guide](docs/integration.md) for custom node registration and React, Vue, Web Component, and host adapter examples.
 
@@ -220,12 +222,12 @@ Current full runtime coverage:
 
 | Metric | Coverage |
 | --- | ---: |
-| Statements | **99.22%** |
-| Branches | **96.08%** |
-| Functions | **99.01%** |
-| Lines | **99.61%** |
+| Statements | **98.06%** |
+| Branches | **95.10%** |
+| Functions | **97.93%** |
+| Lines | **99.08%** |
 
-- All 123 unit and cross-framework integration tests pass.
+- All 125 unit and cross-framework integration tests pass.
 - The repository includes a local A3S Test flow covering Designer → Preview → validation → action.
 - A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
 - CI installs locked dependencies and runs linting, type checks, coverage gates, package/CLI builds, documentation builds, and the Playground build.

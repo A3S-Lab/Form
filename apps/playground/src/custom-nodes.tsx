@@ -34,13 +34,17 @@ function JsonNode({ id, node, value, disabled, invalid, onChange }: FormNodeRend
   }, [serialized]);
 
   return (
-    <div className={`playground-json-node${parseError ? ' is-invalid' : ''}`}>
+    <div
+      className={`playground-json-node field${parseError ? ' is-invalid' : ''}`}
+      data-invalid={invalid || Boolean(parseError) || undefined}
+    >
       <label className="playground-json-label" htmlFor={id}>
         {node.label}
       </label>
       {node.description && <span className="playground-json-help">{node.description}</span>}
       <textarea
         id={id}
+        className="textarea"
         aria-invalid={invalid || Boolean(parseError) || undefined}
         aria-describedby={parseError ? `${id}-json-error` : undefined}
         disabled={disabled}
@@ -97,7 +101,8 @@ function RatingNode({ id, node, value, disabled, invalid, onChange }: FormNodeRe
   const current = typeof value === 'number' ? value : 0;
   return (
     <fieldset
-      className={`playground-rating-node${invalid ? ' is-invalid' : ''}`}
+      className={`playground-rating-node fieldset${invalid ? ' is-invalid' : ''}`}
+      data-invalid={invalid || undefined}
       disabled={disabled}
     >
       <legend id={`${id}-label`}>{node.label}</legend>
@@ -106,6 +111,7 @@ function RatingNode({ id, node, value, disabled, invalid, onChange }: FormNodeRe
         {Array.from({ length: maximum }, (_, index) => index + 1).map((rating) => (
           <label className={rating <= current ? 'is-active' : ''} key={rating}>
             <input
+              className="input"
               type="radio"
               name={id}
               value={rating}
@@ -126,12 +132,13 @@ function RatingInspector({ node, onUpdate }: FormNodeInspectorProps) {
   const maximum = Number(node.customProps?.maximum ?? 5);
   return (
     <div className="playground-rating-inspector">
-      <div className="a3s-form-control">
+      <div className="a3s-form-control field">
         <span>
           最大星数
           <small>3 至 10</small>
         </span>
         <input
+          className="input"
           aria-label="评分最大星数"
           type="number"
           min="3"

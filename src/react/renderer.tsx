@@ -73,6 +73,7 @@ function NativeWidget({
 }: FormWidgetProps) {
   const common: InputHTMLAttributes<HTMLInputElement> = {
     id,
+    className: 'input',
     disabled,
     required,
     'aria-label': node.label ?? node.id,
@@ -85,6 +86,7 @@ function NativeWidget({
       return (
         <textarea
           id={id}
+          className="textarea"
           disabled={disabled}
           required={required}
           aria-label={node.label ?? node.id}
@@ -113,6 +115,8 @@ function NativeWidget({
           <input
             {...common}
             type="checkbox"
+            role={node.widget === 'switch' ? 'switch' : undefined}
+            aria-checked={node.widget === 'switch' ? Boolean(value) : undefined}
             checked={Boolean(value)}
             onChange={(event) => onChange(event.target.checked)}
           />
@@ -158,6 +162,7 @@ function NativeWidget({
           {options.map((option) => (
             <label key={`${option.label}-${String(option.value)}`}>
               <input
+                className="input"
                 type="radio"
                 name={id}
                 value={String(option.value)}
@@ -273,8 +278,9 @@ function NodeView(props: NodeViewProps): ReactNode {
     ) : undefined;
     return (
       <div
-        className={`a3s-form-custom-node${errors.length ? ' is-invalid' : ''}`}
+        className={`a3s-form-custom-node field${errors.length ? ' is-invalid' : ''}`}
         data-node-type={node.widget}
+        data-invalid={errors.length > 0 || undefined}
         style={formItemStyle(node.width)}
       >
         <CustomNode
@@ -340,7 +346,7 @@ function NodeView(props: NodeViewProps): ReactNode {
         : tabs[0]?.id;
       return (
         <section
-          className="a3s-form-layout a3s-form-tabs"
+          className="a3s-form-layout a3s-form-tabs tabs"
           aria-labelledby={node.label ? `${prefix}-${node.id}-title` : undefined}
           style={layoutStyle}
         >
@@ -370,7 +376,7 @@ function NodeView(props: NodeViewProps): ReactNode {
     if (node.layout === 'collapse') {
       return (
         <section
-          className="a3s-form-layout a3s-form-collapse"
+          className="a3s-form-layout a3s-form-collapse accordion"
           aria-labelledby={node.label ? `${prefix}-${node.id}-title` : undefined}
           style={layoutStyle}
         >
@@ -394,7 +400,7 @@ function NodeView(props: NodeViewProps): ReactNode {
     }
     return (
       <Tag
-        className={`a3s-form-layout a3s-form-${node.kind} a3s-form-${node.layout ?? 'flow'}`}
+        className={`a3s-form-layout a3s-form-${node.kind} a3s-form-${node.layout ?? 'flow'}${node.layout === 'card' ? ' card' : ''}`}
         aria-labelledby={node.label ? `${prefix}-${node.id}-title` : undefined}
         style={layoutStyle}
       >
@@ -436,7 +442,7 @@ function NodeView(props: NodeViewProps): ReactNode {
     const items = Array.isArray(current) ? current : [];
     return (
       <fieldset
-        className={`a3s-form-field a3s-form-repeater${errors.length ? ' is-invalid' : ''}`}
+        className={`a3s-form-field a3s-form-repeater fieldset${errors.length ? ' is-invalid' : ''}`}
         style={formItemStyle(node.width)}
         disabled={props.readOnly || !state.enabled}
         aria-describedby={describedBy || undefined}
@@ -451,6 +457,7 @@ function NodeView(props: NodeViewProps): ReactNode {
           // biome-ignore lint/suspicious/noArrayIndexKey: Primitive repeater values have no separate stable identity.
           <div className="a3s-form-repeat-row" key={`${node.id}-${index}`}>
             <input
+              className="input"
               aria-label={`${node.label ?? node.id} ${index + 1}`}
               value={String(item ?? '')}
               onChange={(event) => {
@@ -461,6 +468,9 @@ function NodeView(props: NodeViewProps): ReactNode {
             />
             <button
               type="button"
+              className="btn"
+              data-size="sm"
+              data-variant="destructive"
               onClick={() =>
                 onChange(
                   updateFormValue(
@@ -477,7 +487,9 @@ function NodeView(props: NodeViewProps): ReactNode {
         ))}
         <button
           type="button"
-          className="a3s-form-secondary"
+          className="a3s-form-secondary btn"
+          data-size="sm"
+          data-variant="secondary"
           onClick={() => onChange(updateFormValue(value, node.valuePath as string, [...items, '']))}
         >
           添加一项
@@ -497,7 +509,8 @@ function NodeView(props: NodeViewProps): ReactNode {
   }
   return (
     <div
-      className={`a3s-form-field${errors.length ? ' is-invalid' : ''}`}
+      className={`a3s-form-field field${errors.length ? ' is-invalid' : ''}`}
+      data-invalid={errors.length > 0 || undefined}
       style={formItemStyle(node.width)}
     >
       {node.widget !== 'checkbox' && node.widget !== 'switch' && (
@@ -588,7 +601,8 @@ export function FormRenderer(props: FormRendererProps) {
             <button
               key={action.id}
               type={action.tone === 'primary' ? 'submit' : 'button'}
-              className={action.tone === 'primary' ? 'a3s-form-primary' : 'a3s-form-secondary'}
+              className={`btn ${action.tone === 'primary' ? 'a3s-form-primary' : 'a3s-form-secondary'}`}
+              data-variant={action.tone === 'primary' ? 'primary' : 'secondary'}
               onClick={(event) => {
                 if (action.tone === 'primary') event.preventDefault();
                 void invoke(action.id);
