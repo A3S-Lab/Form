@@ -5,7 +5,7 @@
     "": {
       "name": "@a3s-lab/form",
       "dependencies": {
-        "@a3s-lab/ui": "0.2.0",
+        "@a3s-lab/ui": "0.2.1",
       },
       "devDependencies": {
         "@biomejs/biome": "2.4.15",
@@ -36,7 +36,7 @@
     },
   },
   "packages": {
-    "@a3s-lab/ui": ["@a3s-lab/ui@0.2.0", "", {}, "sha512-CkPoWvnFT8vPyoK/sUTuF2BrA3AmRY5y0SDHfGfkPONPsUyc0cVTgGMluqEw1AoMKAdMASktU7CZ7Di8aq2ljA=="],
+    "@a3s-lab/ui": ["@a3s-lab/ui@0.2.1", "", {}, "sha512-hvn9vRqkkh+aNSkSRjW3EwDHjPz9/uxTpvYLWQFzSElKYPZRPm6ZHUQsQJ08McdcyOXOn8eBUvRERWs7mW6cFw=="],
 
     "@adobe/css-tools": ["@adobe/css-tools@4.5.0", "", {}, "sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q=="],
 

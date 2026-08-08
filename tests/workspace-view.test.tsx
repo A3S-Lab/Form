@@ -41,7 +41,7 @@ describe('Playground WorkspaceView', () => {
     expect(createButton.getAttribute('data-variant')).toBe('primary');
 
     const search = screen.getByRole('textbox', { name: '搜索表单' });
-    expect(search.classList.contains('input')).toBe(false);
+    expect(search.classList.contains('input')).toBe(true);
     expect(search.closest('.playground-search')?.classList.contains('input-group')).toBe(true);
     search.focus();
     expect(window.document.activeElement).toBe(search);

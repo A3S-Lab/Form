@@ -303,6 +303,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 <ProductIcon name="search" size={15} />
                 <span className="sr-only">搜索表单</span>
                 <input
+                  className="input"
                   value={query}
                   placeholder="搜索表单"
                   onChange={(event) => setQuery(event.target.value)}
