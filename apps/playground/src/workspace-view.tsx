@@ -299,11 +299,10 @@ export function WorkspaceView(props: WorkspaceViewProps) {
               </div>
             </div>
             <div className="playground-home-actions">
-              <label className="playground-search">
+              <label className="playground-search input-group">
                 <ProductIcon name="search" size={15} />
                 <span className="sr-only">搜索表单</span>
                 <input
-                  className="input"
                   value={query}
                   placeholder="搜索表单"
                   onChange={(event) => setQuery(event.target.value)}

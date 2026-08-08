@@ -39,6 +39,13 @@ describe('Playground WorkspaceView', () => {
     const createButton = screen.getByRole('button', { name: '新建表单' });
     expect(createButton.classList.contains('btn')).toBe(true);
     expect(createButton.getAttribute('data-variant')).toBe('primary');
+
+    const search = screen.getByRole('textbox', { name: '搜索表单' });
+    expect(search.classList.contains('input')).toBe(false);
+    expect(search.closest('.playground-search')?.classList.contains('input-group')).toBe(true);
+    search.focus();
+    expect(window.document.activeElement).toBe(search);
+
     fireEvent.click(createButton);
 
     const dialog = screen.getByRole('dialog', { name: '创建表单' });
