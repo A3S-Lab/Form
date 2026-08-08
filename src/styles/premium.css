@@ -412,6 +412,10 @@
 /* Responsive authoring surfaces */
 
 @media (max-width: 840px) {
+  .a3s-form-renderer :where(input, textarea, select) {
+    font-size: 16px;
+  }
+
   .a3s-form-designer-toolbar {
     height: 50px;
     flex-basis: 50px;

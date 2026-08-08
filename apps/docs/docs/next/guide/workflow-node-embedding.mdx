@@ -1,0 +1,70 @@
+# Embed a workflow node form
+
+A3S Form can sit inside a Dify-like node settings panel without taking over the workflow product. The host owns the node value and persistence. A3S Form owns compilation, validation, and rendering.
+
+## Pin the form release
+
+Each node stores a configuration-mode `FormRef`:
+
+```ts
+const form = {
+  uri: 'a3s://forms/workflow/llm',
+  revision: 7,
+  digest: 'sha256:…',
+  mode: 'configuration',
+};
+```
+
+`revision` and `digest` prevent a later form release from changing an existing node silently.
+
+## Keep the value controlled
+
+```tsx
+import { FormRenderer } from '@a3s-lab/form/react';
+import {
+  createWorkflowNodeConfiguration,
+  validateWorkflowNodeConfiguration,
+  verifyPinnedForm,
+} from '@a3s-lab/form/workflow';
+import '@a3s-lab/form/styles.css';
+
+const pinned = verifyPinnedForm(document, form);
+if (!pinned.ok) throw new Error(pinned.message);
+
+const configuration = createWorkflowNodeConfiguration({
+  nodeType: 'llm',
+  nodeId,
+  form,
+  value,
+  locale,
+  readOnly: !canEdit,
+});
+
+const save = async () => {
+  const result = validateWorkflowNodeConfiguration(pinned.document, configuration);
+  if (!result.ok) {
+    setErrors(result.errors);
+    return;
+  }
+  await saveNode({ ...configuration, value: result.value });
+};
+
+<FormRenderer
+  plan={pinned.plan}
+  value={value}
+  errors={errors}
+  hostAdapter={hostAdapter}
+  locale={locale}
+  readOnly={!canEdit}
+  onChange={setValue}
+  onAction={save}
+/>;
+```
+
+The host still decides whether the actor can edit, where the value is stored, which secrets a data source may use, and whether an action may run.
+
+## CSS stays inside the form
+
+The Form stylesheet does not contain Tailwind preflight, `:root` tokens, or unscoped element resets. A package check enforces a 120 KB raw / 20 KB gzip budget and rejects host-global selectors.
+
+The type-checked reference component lives in [`examples/dify-like-workflow-node.tsx`](https://github.com/A3S-Lab/Form/blob/main/examples/dify-like-workflow-node.tsx).

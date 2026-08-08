@@ -1,6 +1,18 @@
 import { createRoot, type Root } from 'react-dom/client';
-import type { FormDocument, FormPlan, JsonObject } from './core';
-import { FormDesigner, FormRenderer } from './react';
+import type {
+  CompileOptions,
+  FieldError,
+  FormDocument,
+  FormHostAdapter,
+  FormPlan,
+  JsonObject,
+} from './core';
+import {
+  FormDesigner,
+  type FormNodeRegistry,
+  FormRenderer,
+  type FormWidgetRegistry,
+} from './react';
 
 abstract class ReactFormElement extends HTMLElement {
   protected reactRoot?: Root;
@@ -19,8 +31,50 @@ abstract class ReactFormElement extends HTMLElement {
 }
 
 export class A3SFormRendererElement extends ReactFormElement {
+  private currentErrors?: FieldError[];
+  private currentHostAdapter?: FormHostAdapter;
+  private currentLocale?: string;
+  private currentNodeRegistry?: FormNodeRegistry;
   private currentPlan?: FormPlan;
+  private currentReadOnly = false;
   private currentValue: JsonObject = {};
+  private currentWidgetRegistry?: FormWidgetRegistry;
+
+  get errors(): FieldError[] | undefined {
+    return this.currentErrors;
+  }
+
+  set errors(value: FieldError[] | undefined) {
+    this.currentErrors = value;
+    this.renderReact();
+  }
+
+  get hostAdapter(): FormHostAdapter | undefined {
+    return this.currentHostAdapter;
+  }
+
+  set hostAdapter(value: FormHostAdapter | undefined) {
+    this.currentHostAdapter = value;
+    this.renderReact();
+  }
+
+  get locale(): string | undefined {
+    return this.currentLocale;
+  }
+
+  set locale(value: string | undefined) {
+    this.currentLocale = value;
+    this.renderReact();
+  }
+
+  get nodeRegistry(): FormNodeRegistry | undefined {
+    return this.currentNodeRegistry;
+  }
+
+  set nodeRegistry(value: FormNodeRegistry | undefined) {
+    this.currentNodeRegistry = value;
+    this.renderReact();
+  }
 
   get plan(): FormPlan | undefined {
     return this.currentPlan;
@@ -28,6 +82,15 @@ export class A3SFormRendererElement extends ReactFormElement {
 
   set plan(value: FormPlan | undefined) {
     this.currentPlan = value;
+    this.renderReact();
+  }
+
+  get readOnly(): boolean {
+    return this.currentReadOnly;
+  }
+
+  set readOnly(value: boolean) {
+    this.currentReadOnly = value;
     this.renderReact();
   }
 
@@ -40,12 +103,31 @@ export class A3SFormRendererElement extends ReactFormElement {
     this.renderReact();
   }
 
+  get widgetRegistry(): FormWidgetRegistry | undefined {
+    return this.currentWidgetRegistry;
+  }
+
+  set widgetRegistry(value: FormWidgetRegistry | undefined) {
+    this.currentWidgetRegistry = value;
+    this.renderReact();
+  }
+
   protected renderReact(): void {
-    if (!this.reactRoot || !this.currentPlan) return;
+    if (!this.reactRoot) return;
+    if (!this.currentPlan) {
+      this.reactRoot.render(null);
+      return;
+    }
     this.reactRoot.render(
       <FormRenderer
         plan={this.currentPlan}
         value={this.currentValue}
+        errors={this.currentErrors}
+        hostAdapter={this.currentHostAdapter}
+        locale={this.currentLocale}
+        nodeRegistry={this.currentNodeRegistry}
+        readOnly={this.currentReadOnly}
+        widgetRegistry={this.currentWidgetRegistry}
         onChange={(value) => {
           this.currentValue = value;
           this.renderReact();
@@ -68,8 +150,24 @@ export class A3SFormRendererElement extends ReactFormElement {
 }
 
 export class A3SFormDesignerElement extends ReactFormElement {
+  private currentCompileOptions?: CompileOptions;
   private currentDocument?: FormDocument;
+  private currentErrors?: FieldError[];
+  private currentHostAdapter?: FormHostAdapter;
+  private currentLocale?: string;
+  private currentNodeRegistry?: FormNodeRegistry;
+  private currentReadOnly = false;
   private currentValue: JsonObject = {};
+  private currentWidgetRegistry?: FormWidgetRegistry;
+
+  get compileOptions(): CompileOptions | undefined {
+    return this.currentCompileOptions;
+  }
+
+  set compileOptions(value: CompileOptions | undefined) {
+    this.currentCompileOptions = value;
+    this.renderReact();
+  }
 
   get document(): FormDocument | undefined {
     return this.currentDocument;
@@ -77,6 +175,51 @@ export class A3SFormDesignerElement extends ReactFormElement {
 
   set document(value: FormDocument | undefined) {
     this.currentDocument = value;
+    this.renderReact();
+  }
+
+  get errors(): FieldError[] | undefined {
+    return this.currentErrors;
+  }
+
+  set errors(value: FieldError[] | undefined) {
+    this.currentErrors = value;
+    this.renderReact();
+  }
+
+  get hostAdapter(): FormHostAdapter | undefined {
+    return this.currentHostAdapter;
+  }
+
+  set hostAdapter(value: FormHostAdapter | undefined) {
+    this.currentHostAdapter = value;
+    this.renderReact();
+  }
+
+  get locale(): string | undefined {
+    return this.currentLocale;
+  }
+
+  set locale(value: string | undefined) {
+    this.currentLocale = value;
+    this.renderReact();
+  }
+
+  get nodeRegistry(): FormNodeRegistry | undefined {
+    return this.currentNodeRegistry;
+  }
+
+  set nodeRegistry(value: FormNodeRegistry | undefined) {
+    this.currentNodeRegistry = value;
+    this.renderReact();
+  }
+
+  get readOnly(): boolean {
+    return this.currentReadOnly;
+  }
+
+  set readOnly(value: boolean) {
+    this.currentReadOnly = value;
     this.renderReact();
   }
 
@@ -89,12 +232,32 @@ export class A3SFormDesignerElement extends ReactFormElement {
     this.renderReact();
   }
 
+  get widgetRegistry(): FormWidgetRegistry | undefined {
+    return this.currentWidgetRegistry;
+  }
+
+  set widgetRegistry(value: FormWidgetRegistry | undefined) {
+    this.currentWidgetRegistry = value;
+    this.renderReact();
+  }
+
   protected renderReact(): void {
-    if (!this.reactRoot || !this.currentDocument) return;
+    if (!this.reactRoot) return;
+    if (!this.currentDocument) {
+      this.reactRoot.render(null);
+      return;
+    }
     this.reactRoot.render(
       <FormDesigner
         document={this.currentDocument}
         value={this.currentValue}
+        compileOptions={this.currentCompileOptions}
+        errors={this.currentErrors}
+        hostAdapter={this.currentHostAdapter}
+        locale={this.currentLocale}
+        nodeRegistry={this.currentNodeRegistry}
+        readOnly={this.currentReadOnly}
+        widgetRegistry={this.currentWidgetRegistry}
         onChange={(document) => {
           this.currentDocument = document;
           this.renderReact();
@@ -107,6 +270,15 @@ export class A3SFormDesignerElement extends ReactFormElement {
           this.renderReact();
           this.dispatchEvent(
             new CustomEvent('value-change', { detail: value, bubbles: true, composed: true }),
+          );
+        }}
+        onAction={(actionId, value) => {
+          this.dispatchEvent(
+            new CustomEvent('form-action', {
+              detail: { actionId, value },
+              bubbles: true,
+              composed: true,
+            }),
           );
         }}
       />,

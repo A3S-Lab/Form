@@ -4,7 +4,9 @@ The current development baseline includes:
 
 - Designer, Renderer, and Playground use the published `@a3s-lab/ui@0.2.1` contract;
 - `field`, `fieldset`, `input`, `select`, `btn`, `tabs`, `accordion`, `card`, `app-shell`, and `workspace-header` map to real component DOM;
-- `@a3s-lab/form/styles.css` is self-contained, so a host does not import A3S UI separately;
+- `@a3s-lab/form/styles.css` keeps the A3S UI-compatible token layer inside Form roots and ships no global preflight;
+- workflow-node configuration has a host-neutral, digest-pinned contract and a tested Dify-like React host;
+- Vue and Web Components forward host errors, locale, read-only state, adapters, and extension registries;
 - existing `a3s-form-*` selectors and controlled interfaces remain compatible.
 
-These changes remain in `next` and do not create a new compatibility commitment until released. Product priorities and acceptance criteria are tracked in the [roadmap](/next/roadmap).
+Read the [workflow-node embedding guide](/next/guide/workflow-node-embedding) for the contract and ownership boundaries. These changes remain in `next` and do not create a new compatibility commitment until released.

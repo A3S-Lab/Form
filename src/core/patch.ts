@@ -217,8 +217,9 @@ export function createFormRef(
   document: FormDocument,
   uri: string,
   mode: import('./types').FormRef['mode'],
+  options?: CompileOptions,
 ): import('./types').FormRef {
-  const result = compileForm(document);
+  const result = compileForm(document, options);
   if (!result.ok || !result.document) throw new Error('无法为无效表单创建 FormRef。');
   return {
     uri,

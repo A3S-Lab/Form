@@ -1,5 +1,3 @@
-@import "@a3s-lab/ui/cdn.css";
-
 .a3s-form-designer,
 .a3s-form-renderer {
   --a3s-form-bg: var(--a3s-bg, #f7f7f8);
@@ -52,6 +50,24 @@
 .a3s-form-designer *,
 .a3s-form-renderer * {
   box-sizing: border-box;
+}
+
+.a3s-form-designer :where(button, input, textarea, select, fieldset),
+.a3s-form-renderer :where(button, input, textarea, select, fieldset) {
+  min-width: 0;
+  margin: 0;
+}
+
+.a3s-form-designer :where(button, fieldset),
+.a3s-form-renderer :where(button, fieldset) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.a3s-form-designer :where(h1, h2, h3, h4, p, ol, ul),
+.a3s-form-renderer :where(h1, h2, h3, h4, p, ol, ul) {
+  margin-block: 0;
 }
 
 .a3s-form-designer button,

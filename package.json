@@ -92,7 +92,8 @@
     "test:coverage": "node node_modules/@rstest/core/bin/rstest.js run --coverage",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "bun run lint && bun run typecheck && bun run test:coverage && bun run build && bun run test:cli && bun run playground:build && bun run docs:build"
+    "test:embedding": "node scripts/check-embedding.mjs",
+    "check": "bun run lint && bun run typecheck && bun run test:coverage && bun run build && bun run test:embedding && bun run test:cli && bun run playground:build && bun run docs:build"
   },
   "peerDependencies": {
     "react": ">=18.2.0 <20",
@@ -105,6 +106,7 @@
     }
   },
   "devDependencies": {
+    "@a3s-lab/ui": "0.2.1",
     "@biomejs/biome": "2.4.15",
     "@rsbuild/core": "2.1.9",
     "@rsbuild/plugin-react": "2.1.0",
@@ -117,12 +119,10 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "happy-dom": "20.10.6",
+    "postcss": "8.5.25",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "typescript": "6.0.3",
     "vue": "3.5.27"
-  },
-  "dependencies": {
-    "@a3s-lab/ui": "0.2.1"
   }
 }

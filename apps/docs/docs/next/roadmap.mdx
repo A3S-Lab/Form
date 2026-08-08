@@ -17,6 +17,7 @@ A3S Form is moving from a sound contract foundation toward production form infra
 
 ### v0.2 — Runtime integrity
 
+- Lock in host-neutral embedding: controlled adapters, scoped CSS, package budgets, and a digest-pinned workflow-node configuration contract.
 - Define a closed A3S Form Schema Profile and reject unsupported keywords.
 - Complete deterministic `computed` rule evaluation and rule tracing.
 - Add cancellable async validation and stable server-error mapping.
@@ -47,6 +48,6 @@ A3S Form is moving from a sound contract foundation toward production form infra
 
 ## Boundaries
 
-A3S Form documents will not execute arbitrary JavaScript. Form Core will not duplicate identity, secrets, submission storage, payments, analytics, or connector platforms. Those services belong to A3S Cloud, A3S Workflow, or another host behind explicit capabilities.
+A3S Form documents will not execute arbitrary JavaScript. Form Core will not depend on A3S Cloud, A3S Workflow, Dify, or another platform runtime. It will not duplicate identity, secrets, submission storage, payments, analytics, or connector platforms. Those services stay behind explicit host capabilities.
 
 The canonical milestone scope, known v0.1 limitations, exit criteria, non-goals, and release gates are maintained in [ROADMAP.md](https://github.com/A3S-Lab/Form/blob/main/ROADMAP.md).

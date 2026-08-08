@@ -1,10 +1,10 @@
-# A3S Form 集成指南
+# A3S Form Integration Guide
 
 ## React
 
 ```tsx
+import { assertCompiled } from '@a3s-lab/form/core';
 import { FormDesigner, FormRenderer } from '@a3s-lab/form/react';
-import { assertCompiled, type FormDocument, type JsonObject } from '@a3s-lab/form/core';
 import '@a3s-lab/form/styles.css';
 
 const plan = assertCompiled(document);
@@ -20,23 +20,61 @@ const plan = assertCompiled(document);
 <FormRenderer
   plan={plan}
   value={value}
-  errors={errors}
+  errors={hostErrors}
+  hostAdapter={hostAdapter}
+  locale={locale}
+  readOnly={!canEdit}
   onChange={setValue}
   onAction={handleAction}
 />
 ```
 
-`FormDesigner` 和 `FormRenderer` 都是受控接口。宿主应保存新文档/值，不要依赖组件内部状态作为业务事实源。
+Both components are controlled. Persist the next document or value in the host; internal component state is not a business source of truth.
 
-### A3S UI 样式契约
+## Scoped A3S UI contract
 
-`@a3s-lab/form` 精确依赖已发布的 `@a3s-lab/ui@0.2.1`。构建产物会把预编译 UI 基础样式与 Form 自身样式合并到 `@a3s-lab/form/styles.css`，因此嵌入 Designer 或 Renderer 时只导入这一份样式。
+Import `@a3s-lab/form/styles.css` once. It contains the Form-specific implementation of the A3S UI 0.2.1 token contract, scoped to `.a3s-form-designer` and `.a3s-form-renderer`. It does not import Tailwind preflight, mutate `:root`, or reset host elements.
 
-Renderer 使用 `field`、`fieldset`、`input`、`select`、`btn`、`tabs`、`accordion` 和 `card` 契约；Designer 与 Playground 进一步使用 `workspace-header` 和 `app-shell`。原有 `a3s-form-*` 类继续保留，宿主已有的选择器和自动化测试不需要迁移。
+Use `--a3s-*` custom properties on a host container to theme an embedded form. Avoid overrides against internal class names.
 
-### 自定义表单节点
+## Dify-like workflow node configuration
 
-`FormNodeRegistry` 把一个业务节点的组件目录、默认 Schema、设计态渲染、专属配置面板和运行态渲染收敛为同一份注册定义。文档只保存 registry key 与 JSON 配置，不保存或执行任意 JavaScript。
+The workflow host stores a controlled value and a configuration-mode `FormRef`. The form reference pins a published document by URI, revision, and digest.
+
+```ts
+import {
+  createWorkflowNodeConfiguration,
+  validateWorkflowNodeConfiguration,
+} from '@a3s-lab/form/workflow';
+
+const configuration = createWorkflowNodeConfiguration({
+  nodeType: 'llm',
+  nodeId: 'llm-7',
+  form: configurationFormRef,
+  value: node.configuration,
+  locale: organization.locale,
+  readOnly: !permissions.canEditNode,
+});
+
+const result = validateWorkflowNodeConfiguration(publishedDocument, configuration, {
+  capabilities: { widgets: Object.keys(nodeRegistry) },
+});
+
+if (!result.ok) {
+  showNodeErrors(result.errors);
+} else {
+  await workflowHost.updateNode(configuration.nodeId, {
+    ...configuration,
+    value: result.value,
+  });
+}
+```
+
+The contract has no A3S Cloud, A3S Workflow service, or Dify runtime dependency. See [Embedding A3S Form](embedding.md) and the tested [`DifyLikeWorkflowNode`](../examples/dify-like-workflow-node.tsx).
+
+## Custom nodes
+
+`FormNodeRegistry` keeps a business component's catalog entry, default schema, design view, inspector, and runtime view under one approved registry key. Documents store the key and JSON configuration; they never store executable JavaScript.
 
 ```tsx
 import {
@@ -51,10 +89,10 @@ const nodeRegistry = defineFormNodeRegistry({
     kind: 'field',
     catalog: {
       section: 'business',
-      sectionLabel: '业务组件',
-      label: '评分',
-      description: '采集满意度评分',
-      glyph: '★',
+      sectionLabel: 'Business',
+      label: 'Rating',
+      description: 'Collect a score from one to five.',
+      glyph: 'R',
     },
     schema: { type: 'number', minimum: 1, maximum: 5 },
     defaults: { width: 6, customProps: { maximum: 5 } },
@@ -65,7 +103,7 @@ const nodeRegistry = defineFormNodeRegistry({
 });
 
 function RatingDesign({ node }: FormNodeDesignProps) {
-  return <div>{node.label} · ☆☆☆☆☆</div>;
+  return <div>{node.label}: 0 / 5</div>;
 }
 
 function RatingInspector({ node, onUpdate }: FormNodeInspectorProps) {
@@ -74,10 +112,7 @@ function RatingInspector({ node, onUpdate }: FormNodeInspectorProps) {
       value={Number(node.customProps?.maximum ?? 5)}
       onChange={(event) => {
         const maximum = Number(event.target.value);
-        onUpdate({
-          node: { customProps: { maximum } },
-          schema: { maximum },
-        });
+        onUpdate({ node: { customProps: { maximum } }, schema: { maximum } });
       }}
     />
   );
@@ -86,20 +121,13 @@ function RatingInspector({ node, onUpdate }: FormNodeInspectorProps) {
 function RatingNode({ node, value, onChange }: FormNodeRenderProps) {
   return (
     <button type="button" onClick={() => onChange(5)}>
-      {node.label}：{String(value ?? 0)} 星
+      {node.label}: {String(value ?? 0)} / 5
     </button>
   );
 }
-
-const plan = assertCompiled(document, {
-  capabilities: { widgets: Object.keys(nodeRegistry) },
-});
-
-<FormDesigner document={document} onChange={setDocument} nodeRegistry={nodeRegistry} />;
-<FormRenderer plan={plan} value={value} onChange={setValue} nodeRegistry={nodeRegistry} />;
 ```
 
-`field` 与 `repeater` 类型的自定义节点会创建 Schema 绑定；`content` 用于无值展示节点；`group` 与 `section` 可继续接收子节点和跨容器拖放。配置同时影响节点与 Schema 时，应使用原子 `onUpdate({ node, schema })`；单侧更新仍可使用 `onUpdateNode` 或 `onUpdateSchema`。未在能力列表中声明的 registry key 会被编译器拒绝。
+Pass the same registry to compilation, Designer, and Renderer. Unknown keys fail compilation.
 
 ## Vue 3
 
@@ -115,35 +143,48 @@ const value = ref({});
   <A3SFormRenderer
     :plan="plan"
     v-model="value"
+    :errors="hostErrors"
+    :host-adapter="hostAdapter"
+    :locale="locale"
+    :node-registry="nodeRegistry"
+    :read-only="!canEdit"
+    :widget-registry="widgetRegistry"
     @action="({ actionId, value }) => handleAction(actionId, value)"
   />
 </template>
 ```
 
-Vue adapter 会先解除 Vue reactive proxy，再把普通对象传入只读编译计划和 React 内核，避免结构化克隆边界出错。
+The Vue adapter unwraps reactive proxies before passing documents, plans, values, and registries into the runtime. The Designer adapter also accepts `compileOptions` and emits `action`.
 
-## Web Component
+## Web Components
 
 ```ts
 import { defineA3SFormElements } from '@a3s-lab/form/web-component';
 
 defineA3SFormElements();
+
 const renderer = document.querySelector('a3s-form-renderer');
 renderer.plan = plan;
 renderer.value = value;
-renderer.addEventListener('value-change', (event) => save(event.detail));
-renderer.addEventListener('form-action', (event) => invoke(event.detail));
+renderer.errors = hostErrors;
+renderer.hostAdapter = hostAdapter;
+renderer.locale = locale;
+renderer.nodeRegistry = nodeRegistry;
+renderer.readOnly = !canEdit;
+renderer.widgetRegistry = widgetRegistry;
+renderer.addEventListener('value-change', (event) => updateValue(event.detail));
+renderer.addEventListener('form-action', (event) => handleAction(event.detail));
 ```
 
-提供 `<a3s-form-renderer>` 和 `<a3s-form-designer>`，注册函数可重复调用。事件使用 `bubbles: true` 与 `composed: true`，可以穿过常见组件边界。
+Registration is idempotent. Events bubble and are composed. Setting `plan` or `document` to `undefined` clears the mounted React surface.
 
-## A3S Cloud
+## A3S Cloud host adapter
 
 ```ts
 import { createA3SCloudFormAdapter } from '@a3s-lab/form/cloud';
 
 const hostAdapter = createA3SCloudFormAdapter({
-  context: { organizationId, projectId, environmentId, locale: 'zh-CN' },
+  context: { organizationId, projectId, environmentId, locale },
   resolveDataSource: (context, request, signal) =>
     cloud.forms.resolveOptions(context, request, signal),
   invokeAction: (context, request, signal) =>
@@ -151,30 +192,27 @@ const hostAdapter = createA3SCloudFormAdapter({
 });
 ```
 
-Cloud adapter 只绑定上下文。鉴权、租户隔离、限流、存储、密钥和审计继续由 A3S Cloud 负责，避免产生第二套平台模型。
+The adapter binds context only. Authorization, tenant isolation, rate limits, storage, secrets, and audit remain Cloud responsibilities.
 
-## A3S Workflow
+## Durable workflow interactions
 
 ```ts
 import {
   createInteractionRequest,
-  createWorkflowFormBinding,
   validateInteractionSubmission,
 } from '@a3s-lab/form/workflow';
 
-const binding = createWorkflowFormBinding(configurationFormRef, nodeConfiguration);
 const request = createInteractionRequest(runId, nodeId, interactionFormRef, {
   initialValue,
   expiresAt,
 });
+
 const result = validateInteractionSubmission(publishedDocument, submission);
 ```
 
-`FormRef` 必须固定 `revision` 和 `digest`。工作流运行打开交互后，即使表单后来发布了新版本，当前提交仍按最初固定的表单校验。
+An in-flight run is always validated against its original revision and digest, even after a newer form release is published.
 
-## CLI 与 Coding Agent Skill
-
-构建后可以直接运行：
+## CLI and coding-agent skill
 
 ```bash
 node dist/cli.js sample --output form.json --pretty
@@ -184,20 +222,19 @@ node dist/cli.js diff before.json after.json --output change.patch.json --pretty
 node dist/cli.js patch form.json change.patch.json --output candidate.json --pretty
 ```
 
-`skills/a3s-form` 提供 `$a3s-form` Skill。Coding Agent 应通过 CLI 校验文档、生成/审阅 revision-bound `FormPatch`，不要模拟点击设计器或直接改写 digest。
+The `$a3s-form` skill uses the CLI for validation and revision-bound patches. It does not infer a document by scraping Designer DOM.
 
-## Worker 编译
+## Compiler Worker
 
 ```ts
 import { FormCompilerClient } from '@a3s-lab/form';
 
-const worker = new Worker(
-  new URL('@a3s-lab/form/compiler.worker.js', import.meta.url),
-  { type: 'module' },
-);
+const worker = new Worker(new URL('@a3s-lab/form/compiler.worker.js', import.meta.url), {
+  type: 'module',
+});
 const compiler = new FormCompilerClient(worker);
 const result = await compiler.compile(document, options, abortSignal);
 compiler.dispose();
 ```
 
-每次请求都带唯一 ID；取消或释放客户端会拒绝对应 Promise，并忽略不匹配的 Worker 响应。
+Each request has a unique ID. Cancellation and disposal reject the matching promise and ignore stale Worker responses.

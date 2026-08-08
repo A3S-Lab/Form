@@ -90,6 +90,7 @@ Core invariants:
 - Designer and Renderer consume the same compiler-produced `FormPlan`.
 - AI submits bounded patches; revision conflicts fail instead of overwriting newer human work.
 - Components emit values and actions only. Persistence, identity, authorization, secrets, and side effects belong to the host.
+- Form Core has no platform dependency. React, Vue, and Web Component surfaces accept controlled host state and do not install global CSS resets.
 - Documents never execute arbitrary JavaScript. Widget, data-source, and action keys resolve only through host-approved registries.
 
 Authoring and runtime behavior:
@@ -122,7 +123,7 @@ const plan = assertCompiled(document);
 />
 ```
 
-`@a3s-lab/form/styles.css` bundles the precompiled `@a3s-lab/ui@0.2.1` contract used by the Designer, Renderer, and Playground. A host only needs the Form stylesheet for these surfaces; no second A3S UI stylesheet is required.
+`@a3s-lab/form/styles.css` carries the A3S UI-compatible token contract inside Form roots. It contains no Tailwind preflight, `:root` mutation, or global element reset, so importing it cannot restyle the host application. CI pins `@a3s-lab/ui@0.2.1` as a development contract and checks the shared tokens without making the published Form package load A3S UI globally.
 
 <a id="architecture"></a>
 
@@ -177,7 +178,7 @@ See [Architecture](docs/architecture.md) and [Security Boundaries](docs/security
 | Integration | Contract |
 | --- | --- |
 | **A3S Cloud** | `createA3SCloudFormAdapter` injects organization/project/environment context, data sources, and actions. Cloud retains ownership of authorization, storage, secrets, and audit logs. |
-| **Workflow node configuration** | A node pins only `FormRef { uri, revision, digest, mode: configuration }` and a validated configuration value. |
+| **Workflow node configuration** | `createWorkflowNodeConfiguration` describes a Dify-like node settings form without a platform dependency. `validateWorkflowNodeConfiguration` accepts the value only after its configuration-mode `FormRef` matches the published revision and digest. |
 | **Durable human interaction** | A run emits an `interaction` FormRef and pauses. It resumes only after the submission matches the original revision/digest and passes schema validation. |
 | **A3S Code agentic nodes** | An agent may request governed form interaction but receives no open browser, production credentials, or unbounded action channel. |
 
@@ -192,11 +193,11 @@ Supported exports:
 | `@a3s-lab/form/vue` | Vue 3 `v-model` adapter |
 | `@a3s-lab/form/web-component` | `<a3s-form-designer>` and `<a3s-form-renderer>` |
 | `@a3s-lab/form/cloud` | A3S Cloud host adapter |
-| `@a3s-lab/form/workflow` | FormRef, interaction request, and submission validation |
+| `@a3s-lab/form/workflow` | Workflow-node configuration, FormRef verification, interaction requests, and submission validation |
 | `@a3s-lab/form/compiler.worker.js` | Cancellable browser compiler Worker |
-| `@a3s-lab/form/styles.css` | Self-contained A3S UI 0.2.1 foundation plus Form-specific layout and interaction states |
+| `@a3s-lab/form/styles.css` | Scoped A3S UI-compatible tokens plus Form layout and interaction states; no host-global reset |
 
-See the [Integration Guide](docs/integration.md) for custom node registration and React, Vue, Web Component, and host adapter examples.
+See the [Embedding Guide](docs/embedding.md), the tested [Dify-like React host](examples/dify-like-workflow-node.tsx), and the [Integration Guide](docs/integration.md).
 
 <a id="agent"></a>
 
@@ -235,7 +236,7 @@ A3S Form is planned as five coordinated product layers: deterministic Form Core,
 | Milestone | Product outcome |
 | --- | --- |
 | **v0.1 · current** | Prove the versioned document, deterministic compiler, controlled runtime, visual Designer, host adapters, and governed patch model. |
-| **v0.2 · runtime integrity** | Close schema, computed-rule, async-validation, data-source, localization, and incremental-performance gaps. |
+| **v0.2 · runtime integrity** | Lock down host-neutral embedding, schema and computed semantics, async validation, data sources, localization, and incremental performance. |
 | **v0.3 · complex forms** | Add nested data, repeatable groups, grids, matrices, true wizards, a broader field kit, and visual rule/integration editors. |
 | **v0.4 · governance** | Add draft/release history, diff and rollback, approvals, collaboration contracts, offline sync, audit, policy, and migration tools. |
 | **v1.0 · AI-native production** | Stabilize contracts and deliver inspect → patch → simulate → test → approve → publish workflows across people, agents, Cloud, and Workflow. |
@@ -250,12 +251,12 @@ Current full runtime coverage:
 
 | Metric | Coverage |
 | --- | ---: |
-| Statements | **98.06%** |
-| Branches | **95.10%** |
-| Functions | **97.93%** |
-| Lines | **99.08%** |
+| Statements | **97.54%** |
+| Branches | **95.13%** |
+| Functions | **97.16%** |
+| Lines | **98.93%** |
 
-- All 131 unit and cross-framework integration tests pass.
+- All 137 unit and cross-framework integration tests pass.
 - The repository includes local A3S Test flows covering Designer → focused Preview → validation → action, responsive mobile authoring, browser-local persistence, and validated JSON import.
 - A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
 - CI installs locked dependencies and runs linting, type checks, coverage gates, package/CLI builds, documentation builds, and the Playground build.

@@ -23,6 +23,7 @@ This roadmap describes product outcomes and release gates. It does not assign ca
 4. **Controlled data and side effects.** Values, persistence, credentials, authorization, and external actions remain host-owned.
 5. **Reviewable agent changes.** Agents propose revision-bound patches. Simulation, policy checks, and approval precede publication.
 6. **Complexity must be measurable.** Large-form performance, accessibility, browser parity, and migration compatibility are release gates.
+7. **Embeddability is permanent.** Form Core has no platform dependency; UI adapters remain controlled; styles stay inside Form roots; the host owns persistence, identity, secrets, network policy, and side effects.
 
 ## v0.1 — Contract Foundation (Current)
 
@@ -53,6 +54,9 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 ### Planned capabilities
 
 - Publish **A3S Form Schema Profile 1** with an explicit keyword allowlist, canonical semantics, conformance fixtures, and diagnostics for every unsupported keyword.
+- Publish a host-neutral workflow-node configuration contract for Dify-like settings panels, including node identity, a configuration-mode `FormRef`, controlled values, locale/read-only context, and digest-pinned validation.
+- Remove host-global CSS resets, enforce stylesheet size budgets, and keep A3S UI-compatible tokens scoped to Designer and Renderer roots.
+- Align host-facing value, action, error, locale, read-only, adapter, widget, and node-registry capabilities across React, Vue, and Web Components.
 - Complete the rule runtime for `visible`, `enabled`, `computed`, and `validate`, including deterministic dependency evaluation, cycle diagnostics, and an inspectable execution trace.
 - Add cancellable field-level and form-level asynchronous validation with stable server-error mapping.
 - Implement data-source dependencies and triggers, `cacheTtlMs`, request deduplication, debounce, cancellation, search, pagination, and loading/empty/error/retry states.
@@ -63,6 +67,8 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 ### Exit criteria
 
 - Every schema keyword accepted by the compiler has browser/server validation parity; every other keyword is rejected.
+- The tested Dify-like reference host can render and commit a workflow-node configuration without importing A3S Cloud, A3S Workflow runtime services, or global UI resets.
+- Package checks reject global selectors and fail when the embedding stylesheet exceeds its raw or gzip budget.
 - Computed-rule chains and rule failures have deterministic integration coverage.
 - Editing an unrelated field neither refetches an independent data source nor rerenders unaffected field components.
 - Request cancellation, stale responses, async validation races, and host failures have regression coverage.
@@ -82,7 +88,7 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 - Rule dependency visualization, sample-data simulation, execution tracing, and compiler diagnostics linked back to the relevant Studio control.
 - Reusable fragments, nested form references, templates, design tokens, and theme configuration.
 - Localized labels, descriptions, options, and validation messages with RTL support.
-- Framework adapter parity and documented bundle/runtime budgets for React, Vue, and Web Components.
+- Documented render and runtime budgets for React, Vue, and Web Components as the complex field set expands.
 - WCAG 2.2 AA interaction baseline with automated accessibility and keyboard regression coverage.
 
 ### Exit criteria
@@ -141,6 +147,7 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 
 - A3S Form Core will not execute arbitrary JavaScript stored in a form document.
 - A3S Form Core will not become a second identity, authorization, secrets, payment, submission, or analytics platform.
+- A3S Form will not require A3S Cloud, A3S Workflow, Dify, or another platform runtime in order to render or validate a form.
 - The package will not claim full JSON Schema compatibility while unsupported keywords are ignored.
 - Tabs will not be marketed as a replacement for a true multi-page or wizard runtime.
 - Browser `localStorage` will not be presented as enterprise persistence, collaboration, or offline synchronization.
@@ -153,5 +160,6 @@ Every milestone must include:
 - browser and server conformance fixtures for shared semantics;
 - A3S Test coverage for critical Designer-to-runtime workflows;
 - accessibility, keyboard, performance, and failure-state checks appropriate to the milestone;
+- an embedding conformance check covering controlled ownership, adapter parity, host CSS isolation, package budgets, and a neutral workflow-node host;
 - security-boundary review for every new registry, data source, action, file, or agent capability;
 - documentation, runnable examples, and migration notes before a capability is marked stable.
