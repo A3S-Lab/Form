@@ -23,6 +23,7 @@
   <a href="#architecture">Architecture</a> ·
   <a href="#embedding">Embedding</a> ·
   <a href="#agent">Coding Agent</a> ·
+  <a href="#roadmap">Roadmap</a> ·
   <a href="#quality">Quality</a>
 </p>
 
@@ -79,7 +80,7 @@ A basic schema renderer only draws inputs. A3S Form gives design, preview, runti
 | Surface | Implemented capabilities |
 | --- | --- |
 | **Form Designer** | Published A3S UI component contracts, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, focused preview, responsive component/canvas/settings panels, undo/redo, save feedback, and compiler diagnostics |
-| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, validation summaries, error focus, async action states, rules, data sources, custom nodes, and repeaters |
+| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, validation summaries, error focus, async action states, `visible`/`enabled`/`validate` rules, host-resolved option sources, custom nodes, and primitive repeaters |
 | **Form Compiler** | Input boundaries, semantic validation, dependency-cycle detection, capability checks, canonical SHA-256, immutable `FormPlan`, and a cancellable Worker |
 | **Agent Interface** | JSON CLI, revision-bound `FormPatch`, in-Designer JSON preflight and conflict feedback, `$a3s-form` skill, machine-readable diagnostics, and atomic changes |
 
@@ -98,6 +99,9 @@ Authoring and runtime behavior:
 - Save actions expose saving, saved, and failed states. `Cmd/Ctrl+S` uses the same save path as the toolbar action.
 - The Agent panel accepts deterministic `FormPatch` JSON, shows the current revision and protocol, validates the payload before applying it, and reports revision conflicts without mutating the document.
 - Draft actions receive the current controlled value without being blocked by required-field validation. Submit actions validate, show a summary, and focus the first invalid field.
+
+> [!IMPORTANT]
+> The v0.1 contract is a foundation, not a claim of full JSON Schema or enterprise-form parity. Computed-rule execution, a closed schema profile, complex repeatable groups, field-level subscriptions, complete localization, and draft/release collaboration are planned work. See the [product roadmap](ROADMAP.md) for scope and release gates.
 
 ### Minimal React embedding
 
@@ -118,7 +122,7 @@ const plan = assertCompiled(document);
 />
 ```
 
-`@a3s-lab/form/styles.css` bundles the precompiled `@a3s-lab/ui@0.2.0` contract used by the Designer, Renderer, and Playground. A host only needs the Form stylesheet for these surfaces; no second A3S UI stylesheet is required.
+`@a3s-lab/form/styles.css` bundles the precompiled `@a3s-lab/ui@0.2.1` contract used by the Designer, Renderer, and Playground. A host only needs the Form stylesheet for these surfaces; no second A3S UI stylesheet is required.
 
 <a id="architecture"></a>
 
@@ -156,7 +160,7 @@ const plan = assertCompiled(document);
 ```text
 schema          supported JSON Schema 2020-12 subset
 ui              nodes, layouts, widget keys, hints, and options
-rules           pure visible / enabled / computed / validate expressions
+rules           pure visible / enabled / validate expressions; computed is reserved for v0.2
 dataSources     declarative data requests resolved by the host
 actions         declarative actions resolved by the host
 metadata        title, locale, ownership, and compatibility information
@@ -190,7 +194,7 @@ Supported exports:
 | `@a3s-lab/form/cloud` | A3S Cloud host adapter |
 | `@a3s-lab/form/workflow` | FormRef, interaction request, and submission validation |
 | `@a3s-lab/form/compiler.worker.js` | Cancellable browser compiler Worker |
-| `@a3s-lab/form/styles.css` | Self-contained A3S UI 0.2.0 foundation plus Form-specific layout and interaction states |
+| `@a3s-lab/form/styles.css` | Self-contained A3S UI 0.2.1 foundation plus Form-specific layout and interaction states |
 
 See the [Integration Guide](docs/integration.md) for custom node registration and React, Vue, Web Component, and host adapter examples.
 
@@ -221,6 +225,22 @@ validate current
 ```
 
 The skill lives at [`skills/a3s-form`](skills/a3s-form/SKILL.md). It requires the agent to treat the CLI as the semantic authority, never infer a document by scraping the UI, and never fabricate revisions or digests.
+
+<a id="roadmap"></a>
+
+## Product Roadmap
+
+A3S Form is planned as five coordinated product layers: deterministic Form Core, an accessible Runtime, a complete visual Studio, lifecycle Governance, and a policy-bound Agent interface. Submission storage, files, payments, webhooks, analytics, identity, and secrets remain A3S Cloud or host responsibilities behind stable Form contracts.
+
+| Milestone | Product outcome |
+| --- | --- |
+| **v0.1 · current** | Prove the versioned document, deterministic compiler, controlled runtime, visual Designer, host adapters, and governed patch model. |
+| **v0.2 · runtime integrity** | Close schema, computed-rule, async-validation, data-source, localization, and incremental-performance gaps. |
+| **v0.3 · complex forms** | Add nested data, repeatable groups, grids, matrices, true wizards, a broader field kit, and visual rule/integration editors. |
+| **v0.4 · governance** | Add draft/release history, diff and rollback, approvals, collaboration contracts, offline sync, audit, policy, and migration tools. |
+| **v1.0 · AI-native production** | Stabilize contracts and deliver inspect → patch → simulate → test → approve → publish workflows across people, agents, Cloud, and Workflow. |
+
+The complete scope, non-goals, and acceptance criteria live in [ROADMAP.md](ROADMAP.md). Planned work is not described as implemented until its release gates pass.
 
 <a id="quality"></a>
 

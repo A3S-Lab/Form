@@ -20,6 +20,7 @@ export default defineConfig({
     lastUpdated: true,
     nav: [
       { text: '使用指南', link: '/guide/' },
+      { text: 'Roadmap', link: '/roadmap' },
       {
         text: '在线 Playground',
         link: 'https://a3s-lab.github.io/Form/playground/',
@@ -40,10 +41,12 @@ export default defineConfig({
           ],
         },
         { text: '架构设计', link: '/architecture' },
+        { text: 'Product roadmap', link: '/roadmap' },
       ],
       '/next/': [
-        { text: '开发预览', link: '/next/' },
-        { text: '开发指南', link: '/next/guide/' },
+        { text: 'Development preview', link: '/next/' },
+        { text: 'Product roadmap', link: '/next/roadmap' },
+        { text: 'Development baseline', link: '/next/guide/' },
       ],
     },
     editLink: {

@@ -1,10 +1,10 @@
-# 开发预览
+# Development baseline
 
-当前开发版已经完成：
+The current development baseline includes:
 
-- Designer、Renderer 与 Playground 统一使用已发布的 `@a3s-lab/ui@0.2.0`；
-- `field`、`fieldset`、`input`、`select`、`btn`、`tabs`、`accordion`、`card`、`app-shell` 与 `workspace-header` 都落在真实组件 DOM 上；
-- `@a3s-lab/form/styles.css` 提供自包含样式，宿主不用重复导入 A3S UI；
-- 原有 `a3s-form-*` 类和受控接口保持不变。
+- Designer, Renderer, and Playground use the published `@a3s-lab/ui@0.2.1` contract;
+- `field`, `fieldset`, `input`, `select`, `btn`, `tabs`, `accordion`, `card`, `app-shell`, and `workspace-header` map to real component DOM;
+- `@a3s-lab/form/styles.css` is self-contained, so a host does not import A3S UI separately;
+- existing `a3s-form-*` selectors and controlled interfaces remain compatible.
 
-这组变更仍位于 `next`，进入稳定版本前不构成新的兼容性承诺。
+These changes remain in `next` and do not create a new compatibility commitment until released. Product priorities and acceptance criteria are tracked in the [roadmap](/next/roadmap).

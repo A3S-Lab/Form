@@ -1,0 +1,52 @@
+# Product roadmap
+
+A3S Form is moving from a sound contract foundation toward production form infrastructure for people, agents, A3S Cloud, and A3S Workflow. Work is ordered by semantic risk: runtime correctness comes before a larger component catalog, and lifecycle governance comes before SaaS-style expansion.
+
+## Capability model
+
+| Layer | Responsibility |
+| --- | --- |
+| Form Core | Schema profile, compiler, rules, validation, immutable plans, patches, revisions, and digests |
+| Runtime | Field state, accessible rendering, layouts, data-source/action ports, localization, and incremental updates |
+| Studio | Visual design, rule and integration configuration, preview, simulation, diagnostics, and change review |
+| Governance | Drafts, releases, history, diff, rollback, approval hooks, audit events, and collaboration contracts |
+| Agent interface | Inspect, propose, patch, simulate, validate, test, and policy-bound publish requests |
+| Host platform | Identity, authorization, persistence, submissions, files, payments, webhooks, analytics, and secrets |
+
+## Milestones
+
+### v0.2 — Runtime integrity
+
+- Define a closed A3S Form Schema Profile and reject unsupported keywords.
+- Complete deterministic `computed` rule evaluation and rule tracing.
+- Add cancellable async validation and stable server-error mapping.
+- Implement data-source dependencies, triggers, caching, deduplication, search, pagination, and failure states.
+- Add field-level subscriptions, incremental rule evaluation, locale catalogs, and tracked large-form benchmarks.
+
+### v0.3 — Complex forms and complete Studio
+
+- Add nested objects and arrays, repeatable groups, grids, matrices, stable row identity, and row reordering.
+- Add true pages and wizards with branching, progress, page validation, review, and resume checkpoints.
+- Expand first-party fields and provide audited extensions for file, signature, address, rich text, and CAPTCHA use cases.
+- Add visual condition, calculation, validation, data-source, action, and payload editors.
+- Deliver reusable fragments, templates, theme tokens, RTL support, adapter parity, and a WCAG 2.2 AA baseline.
+
+### v0.4 — Lifecycle and governance
+
+- Separate mutable drafts from immutable releases.
+- Add history, provenance, structured diff, restore, rollback, environment promotion, and approvals.
+- Add presence, locking, patch rebasing, conflict review, autosave, durable resume, and offline synchronization contracts.
+- Add audit, policy, PII, registry-version, signed-release, and migration contracts.
+
+### v1.0 — AI-native production contract
+
+- Stabilize document, plan, patch, interaction, and release protocols with migration tooling.
+- Provide agent operations for inspect → propose → diff → simulate → validate → test → approve → publish.
+- Attach explanations, risk checks, fixtures, tests, provenance, policy results, reviewers, and release digests to agent-authored changes.
+- Ship reference lifecycle integrations for A3S Cloud and durable human-task integrations for A3S Workflow.
+
+## Boundaries
+
+A3S Form documents will not execute arbitrary JavaScript. Form Core will not duplicate identity, secrets, submission storage, payments, analytics, or connector platforms. Those services belong to A3S Cloud, A3S Workflow, or another host behind explicit capabilities.
+
+The canonical milestone scope, known v0.1 limitations, exit criteria, non-goals, and release gates are maintained in [ROADMAP.md](https://github.com/A3S-Lab/Form/blob/main/ROADMAP.md).

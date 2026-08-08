@@ -30,7 +30,7 @@ const plan = assertCompiled(document);
 
 ### A3S UI 样式契约
 
-`@a3s-lab/form` 精确依赖已发布的 `@a3s-lab/ui@0.2.0`。构建产物会把预编译 UI 基础样式与 Form 自身样式合并到 `@a3s-lab/form/styles.css`，因此嵌入 Designer 或 Renderer 时只导入这一份样式。
+`@a3s-lab/form` 精确依赖已发布的 `@a3s-lab/ui@0.2.1`。构建产物会把预编译 UI 基础样式与 Form 自身样式合并到 `@a3s-lab/form/styles.css`，因此嵌入 Designer 或 Renderer 时只导入这一份样式。
 
 Renderer 使用 `field`、`fieldset`、`input`、`select`、`btn`、`tabs`、`accordion` 和 `card` 契约；Designer 与 Playground 进一步使用 `workspace-header` 和 `app-shell`。原有 `a3s-form-*` 类继续保留，宿主已有的选择器和自动化测试不需要迁移。
 
