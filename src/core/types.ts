@@ -149,6 +149,72 @@ export interface FormMetadata {
   updatedAt?: string;
 }
 
+export interface FormLocaleMessages {
+  checkboxEnabled: string;
+  selectPlaceholder: string;
+  repeaterRemove: string;
+  repeaterAdd: string;
+  validationPending: string;
+  validationPendingLabel: string;
+  dataSourceSearchLabel: string;
+  dataSourceSearchAriaLabel: string;
+  dataSourceSearchPlaceholder: string;
+  dataSourceFocusPrompt: string;
+  dataSourceDependencyPrompt: string;
+  dataSourceLoading: string;
+  dataSourceLoadingLabel: string;
+  dataSourceEmpty: string;
+  dataSourceError: string;
+  dataSourceErrorLabel: string;
+  dataSourceRetry: string;
+  dataSourceRetryLabel: string;
+  dataSourcePageError: string;
+  dataSourcePageErrorLabel: string;
+  dataSourcePageRetryLabel: string;
+  dataSourceLoadMore: string;
+  dataSourceLoadMoreLabel: string;
+  dataSourceLoadingMore: string;
+  actionFailed: string;
+  errorSummaryLabel: string;
+  errorSummaryTitle: string;
+  errorSummarySeparator: string;
+  actionButtonPending: string;
+  actionPending: string;
+  formValidationButtonPending: string;
+  formValidationPending: string;
+  formValidationPendingLabel: string;
+  validationType: string;
+  validationMinLength: string;
+  validationMaxLength: string;
+  validationPattern: string;
+  validationInvalidPattern: string;
+  validationFormat: string;
+  validationMinimum: string;
+  validationMaximum: string;
+  validationConst: string;
+  validationEnum: string;
+  validationMinItems: string;
+  validationMaxItems: string;
+  validationUniqueItems: string;
+  validationRequired: string;
+  validationAdditionalProperties: string;
+  validationRule: string;
+  asyncInvalidScope: string;
+  asyncUnavailable: string;
+  asyncInvalidResponse: string;
+}
+
+export interface FormLocaleCatalog {
+  apiVersion: 'a3s.dev/form-locale-catalog/v1';
+  locale: string;
+  messages: Readonly<FormLocaleMessages>;
+}
+
+export interface FormLocaleCatalogOverride {
+  apiVersion: 'a3s.dev/form-locale-catalog/v1';
+  messages: Partial<FormLocaleMessages>;
+}
+
 export interface FormDocument {
   kind: 'a3s.form';
   apiVersion: 'a3s.dev/form/v1alpha1';
@@ -210,6 +276,8 @@ export interface FormPlan {
   nodes: CompiledNode[];
   nodeById: Readonly<Record<string, CompiledNode>>;
   rules: FormRule[];
+  ruleDependencies: Readonly<Record<string, readonly string[]>>;
+  nodeSubscriptions: Readonly<Record<string, readonly string[]>>;
   expressionOperationLimit: number;
   dependencyOrder: string[];
   dataSources: DataSourceDefinition[];
@@ -292,10 +360,20 @@ export interface ComputedRuleEvaluationOptions {
   includeValues?: boolean;
 }
 
+export interface FormValueEvaluationOptions extends ComputedRuleEvaluationOptions {
+  locale?: string;
+  localeCatalog?: FormLocaleCatalogOverride;
+}
+
 export interface ComputedRuleEvaluation {
   value: JsonObject;
   trace: ComputedRuleTraceEntry[];
   errors: FieldError[];
+}
+
+export interface IncrementalComputedRuleEvaluation extends ComputedRuleEvaluation {
+  evaluatedRuleIds: string[];
+  reusedRuleIds: string[];
 }
 
 export type FormValueEvaluation = ComputedRuleEvaluation;
@@ -335,6 +413,7 @@ export interface AsyncValidationOptions {
   scope?: AsyncValidationScope;
   trigger?: AsyncValidationTrigger;
   locale?: string;
+  localeCatalog?: FormLocaleCatalogOverride;
 }
 
 export interface AsyncValidationEvaluation extends FormValueEvaluation {

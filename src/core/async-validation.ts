@@ -1,3 +1,4 @@
+import { resolveFormLocaleCatalog } from './locale';
 import { evaluateFormValue } from './state';
 import type {
   AsyncValidationEvaluation,
@@ -104,15 +105,14 @@ export async function validateFormValueAsync(
   options: AsyncValidationOptions = {},
   signal: AbortSignal = new AbortController().signal,
 ): Promise<AsyncValidationEvaluation> {
-  const evaluation = evaluateFormValue(plan, value);
+  const evaluation = evaluateFormValue(plan, value, options);
+  const messages = resolveFormLocaleCatalog(
+    options.locale ?? plan.metadata.locale,
+    options.localeCatalog,
+  ).messages;
   const scope = options.scope ?? { kind: 'form' };
   if (!isScopeValid(plan, scope)) {
-    return validationFailure(
-      evaluation,
-      scope,
-      'invalid_scope',
-      'The asynchronous validation scope does not match the compiled form plan.',
-    );
+    return validationFailure(evaluation, scope, 'invalid_scope', messages.asyncInvalidScope);
   }
   if (hasBlockingErrors(evaluation, scope)) {
     return { ...evaluation, asyncErrors: [], status: 'invalid' };
@@ -132,12 +132,7 @@ export async function validateFormValueAsync(
     response = await validator(request, signal);
   } catch {
     if (signal.aborted) return { ...evaluation, asyncErrors: [], status: 'cancelled' };
-    return validationFailure(
-      evaluation,
-      scope,
-      'unavailable',
-      'Validation could not be completed. Try again.',
-    );
+    return validationFailure(evaluation, scope, 'unavailable', messages.asyncUnavailable);
   }
   if (signal.aborted) return { ...evaluation, asyncErrors: [], status: 'cancelled' };
 
@@ -145,12 +140,7 @@ export async function validateFormValueAsync(
   try {
     asyncErrors = mapAsyncValidationIssues(response, scope);
   } catch {
-    return validationFailure(
-      evaluation,
-      scope,
-      'invalid_response',
-      'The host returned an invalid asynchronous validation response.',
-    );
+    return validationFailure(evaluation, scope, 'invalid_response', messages.asyncInvalidResponse);
   }
   return {
     ...evaluation,

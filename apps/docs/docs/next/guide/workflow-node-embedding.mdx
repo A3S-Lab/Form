@@ -28,6 +28,7 @@ import {
   validateWorkflowNodeConfiguration,
   verifyPinnedForm,
 } from '@a3s-lab/form/workflow';
+import { FORM_LOCALE_CATALOG_API_VERSION } from '@a3s-lab/form/core';
 import '@a3s-lab/form/styles.css';
 
 const pinned = verifyPinnedForm(document, form);
@@ -57,6 +58,10 @@ const save = async () => {
   errors={errors}
   hostAdapter={hostAdapter}
   locale={locale}
+  localeCatalog={{
+    apiVersion: FORM_LOCALE_CATALOG_API_VERSION,
+    messages: { selectPlaceholder: 'Choose a model' },
+  }}
   readOnly={!canEdit}
   onChange={setValue}
   onAction={save}
@@ -64,6 +69,8 @@ const save = async () => {
 ```
 
 The host still decides whether the actor can edit, where the value is stored, which secrets a data source may use, and whether an action may run.
+
+Locale overrides are host configuration and are not stored in the workflow node value or form document. The compiled plan also records field subscriptions, so editing one node setting does not redraw or refetch unrelated settings. Pagination and field callbacks still receive the newest complete controlled value.
 
 ## CSS stays inside the form
 

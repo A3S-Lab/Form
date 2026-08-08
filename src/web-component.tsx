@@ -4,6 +4,7 @@ import type {
   FieldError,
   FormDocument,
   FormHostAdapter,
+  FormLocaleCatalogOverride,
   FormPlan,
   JsonObject,
 } from './core';
@@ -34,6 +35,7 @@ export class A3SFormRendererElement extends ReactFormElement {
   private currentErrors?: FieldError[];
   private currentHostAdapter?: FormHostAdapter;
   private currentLocale?: string;
+  private currentLocaleCatalog?: FormLocaleCatalogOverride;
   private currentNodeRegistry?: FormNodeRegistry;
   private currentPlan?: FormPlan;
   private currentReadOnly = false;
@@ -64,6 +66,15 @@ export class A3SFormRendererElement extends ReactFormElement {
 
   set locale(value: string | undefined) {
     this.currentLocale = value;
+    this.renderReact();
+  }
+
+  get localeCatalog(): FormLocaleCatalogOverride | undefined {
+    return this.currentLocaleCatalog;
+  }
+
+  set localeCatalog(value: FormLocaleCatalogOverride | undefined) {
+    this.currentLocaleCatalog = value;
     this.renderReact();
   }
 
@@ -125,6 +136,7 @@ export class A3SFormRendererElement extends ReactFormElement {
         errors={this.currentErrors}
         hostAdapter={this.currentHostAdapter}
         locale={this.currentLocale}
+        localeCatalog={this.currentLocaleCatalog}
         nodeRegistry={this.currentNodeRegistry}
         readOnly={this.currentReadOnly}
         widgetRegistry={this.currentWidgetRegistry}
@@ -155,6 +167,7 @@ export class A3SFormDesignerElement extends ReactFormElement {
   private currentErrors?: FieldError[];
   private currentHostAdapter?: FormHostAdapter;
   private currentLocale?: string;
+  private currentLocaleCatalog?: FormLocaleCatalogOverride;
   private currentNodeRegistry?: FormNodeRegistry;
   private currentReadOnly = false;
   private currentValue: JsonObject = {};
@@ -202,6 +215,15 @@ export class A3SFormDesignerElement extends ReactFormElement {
 
   set locale(value: string | undefined) {
     this.currentLocale = value;
+    this.renderReact();
+  }
+
+  get localeCatalog(): FormLocaleCatalogOverride | undefined {
+    return this.currentLocaleCatalog;
+  }
+
+  set localeCatalog(value: FormLocaleCatalogOverride | undefined) {
+    this.currentLocaleCatalog = value;
     this.renderReact();
   }
 
@@ -255,6 +277,7 @@ export class A3SFormDesignerElement extends ReactFormElement {
         errors={this.currentErrors}
         hostAdapter={this.currentHostAdapter}
         locale={this.currentLocale}
+        localeCatalog={this.currentLocaleCatalog}
         nodeRegistry={this.currentNodeRegistry}
         readOnly={this.currentReadOnly}
         widgetRegistry={this.currentWidgetRegistry}

@@ -3,7 +3,10 @@
 ## React
 
 ```tsx
-import { assertCompiled } from '@a3s-lab/form/core';
+import {
+  assertCompiled,
+  FORM_LOCALE_CATALOG_API_VERSION,
+} from '@a3s-lab/form/core';
 import { FormDesigner, FormRenderer } from '@a3s-lab/form/react';
 import '@a3s-lab/form/styles.css';
 
@@ -23,6 +26,10 @@ const plan = assertCompiled(document);
   errors={hostErrors}
   hostAdapter={hostAdapter}
   locale={locale}
+  localeCatalog={{
+    apiVersion: FORM_LOCALE_CATALOG_API_VERSION,
+    messages: { selectPlaceholder: 'Choose a model' },
+  }}
   readOnly={!canEdit}
   onChange={setValue}
   onAction={handleAction}
@@ -146,6 +153,7 @@ const value = ref({});
     :errors="hostErrors"
     :host-adapter="hostAdapter"
     :locale="locale"
+    :locale-catalog="localeCatalog"
     :node-registry="nodeRegistry"
     :read-only="!canEdit"
     :widget-registry="widgetRegistry"
@@ -169,6 +177,7 @@ renderer.value = value;
 renderer.errors = hostErrors;
 renderer.hostAdapter = hostAdapter;
 renderer.locale = locale;
+renderer.localeCatalog = localeCatalog;
 renderer.nodeRegistry = nodeRegistry;
 renderer.readOnly = !canEdit;
 renderer.widgetRegistry = widgetRegistry;

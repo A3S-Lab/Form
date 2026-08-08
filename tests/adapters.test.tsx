@@ -7,6 +7,7 @@ import {
   type FieldError,
   type FormDocument,
   type FormHostAdapter,
+  type FormLocaleCatalogOverride,
   type JsonObject,
 } from '../src/core';
 import type { FormNodeRegistry, FormWidgetRegistry } from '../src/react';
@@ -29,6 +30,10 @@ describe('framework adapters', () => {
       { path: 'name', code: 'host.conflict', message: 'This value changed in the workflow.' },
     ]);
     const locale = vueRef('en-US');
+    const localeCatalog = vueRef<FormLocaleCatalogOverride | undefined>({
+      apiVersion: 'a3s.dev/form-locale-catalog/v1',
+      messages: { selectPlaceholder: 'Choose a workflow role' },
+    });
     const widgetRegistry = vueRef<FormWidgetRegistry>();
     const nodeRegistry = vueRef<FormNodeRegistry>();
     const resolvedLocales: string[] = [];
@@ -53,6 +58,7 @@ describe('framework adapters', () => {
           errors: errors.value,
           hostAdapter: hostAdapter.value,
           locale: locale.value,
+          localeCatalog: localeCatalog.value,
           widgetRegistry: widgetRegistry.value,
           nodeRegistry: nodeRegistry.value,
           'onUpdate:modelValue': (next: JsonObject) => {
@@ -67,6 +73,7 @@ describe('framework adapters', () => {
     await nextTick();
     await waitFor(() => expect(resolvedLocales).toContain('en-US'));
     expect(await waitFor(() => container.querySelector('option[value="member"]'))).toBeTruthy();
+    expect(container.textContent).toContain('Choose a workflow role');
     expect(container.textContent).toContain('This value changed in the workflow.');
     const name = await waitFor(() => {
       const input = container.querySelector('input[id*="name"]') as HTMLInputElement | null;
@@ -98,6 +105,7 @@ describe('framework adapters', () => {
     expect(container.textContent).not.toContain('This value changed in the workflow.');
     errors.value = undefined;
     hostAdapter.value = undefined;
+    localeCatalog.value = undefined;
     nodeRegistry.value = undefined;
     await nextTick();
     app.unmount();
@@ -115,6 +123,10 @@ describe('framework adapters', () => {
     const errors = vueRef<FieldError[]>([]);
     const hostAdapter: FormHostAdapter = {};
     const readOnly = vueRef(false);
+    const localeCatalog: FormLocaleCatalogOverride = {
+      apiVersion: 'a3s.dev/form-locale-catalog/v1',
+      messages: { selectPlaceholder: 'Choose in designer preview' },
+    };
     const previewModel = vueRef<JsonObject>({});
     let previewValue: JsonObject | undefined;
     let action: { actionId: string; value: JsonObject } | undefined;
@@ -126,6 +138,7 @@ describe('framework adapters', () => {
           errors: errors.value,
           hostAdapter,
           locale: 'en-US',
+          localeCatalog,
           modelValue: previewModel.value,
           nodeRegistry: nodeRegistry.value,
           readOnly: readOnly.value,
@@ -252,6 +265,11 @@ describe('framework adapters', () => {
       },
     };
     element.locale = 'en-US';
+    const localeCatalog: FormLocaleCatalogOverride = {
+      apiVersion: 'a3s.dev/form-locale-catalog/v1',
+      messages: { selectPlaceholder: 'Choose an embedded role' },
+    };
+    element.localeCatalog = localeCatalog;
     element.nodeRegistry = nodeRegistry;
     element.readOnly = true;
     element.widgetRegistry = widgetRegistry;
@@ -259,6 +277,7 @@ describe('framework adapters', () => {
     expect(element.errors).toHaveLength(1);
     expect(element.hostAdapter).toBeTruthy();
     expect(element.locale).toBe('en-US');
+    expect(element.localeCatalog).toBe(localeCatalog);
     expect(element.nodeRegistry).toBe(nodeRegistry);
     expect(element.readOnly).toBe(true);
     expect(element.widgetRegistry).toBe(widgetRegistry);
@@ -266,6 +285,7 @@ describe('framework adapters', () => {
     document.body.append(element);
     await waitFor(() => expect(locales).toContain('en-US'));
     await waitFor(() => expect(element.querySelector('option[value="member"]')).toBeTruthy());
+    expect(element.textContent).toContain('Choose an embedded role');
     await waitFor(() =>
       expect((element.querySelector('input[id*="name"]') as HTMLInputElement).disabled).toBe(true),
     );
@@ -294,6 +314,11 @@ describe('framework adapters', () => {
     element.errors = [];
     element.hostAdapter = hostAdapter;
     element.locale = 'en-US';
+    const localeCatalog: FormLocaleCatalogOverride = {
+      apiVersion: 'a3s.dev/form-locale-catalog/v1',
+      messages: { selectPlaceholder: 'Choose in preview' },
+    };
+    element.localeCatalog = localeCatalog;
     element.nodeRegistry = nodeRegistry;
     element.readOnly = false;
     element.value = {};
@@ -303,6 +328,7 @@ describe('framework adapters', () => {
     expect(element.errors).toEqual([]);
     expect(element.hostAdapter).toBe(hostAdapter);
     expect(element.locale).toBe('en-US');
+    expect(element.localeCatalog).toBe(localeCatalog);
     expect(element.nodeRegistry).toBe(nodeRegistry);
     expect(element.readOnly).toBe(false);
     expect(element.value).toEqual({});

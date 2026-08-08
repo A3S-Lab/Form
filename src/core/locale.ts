@@ -1,0 +1,155 @@
+import type { FormLocaleCatalog, FormLocaleCatalogOverride, FormLocaleMessages } from './types';
+
+export const FORM_LOCALE_CATALOG_API_VERSION = 'a3s.dev/form-locale-catalog/v1' as const;
+
+const EN_MESSAGES: Readonly<FormLocaleMessages> = Object.freeze({
+  checkboxEnabled: 'Enabled',
+  selectPlaceholder: 'Select',
+  repeaterRemove: 'Remove',
+  repeaterAdd: 'Add item',
+  validationPending: 'Validating…',
+  validationPendingLabel: 'Validating {label}',
+  dataSourceSearchLabel: 'Search options',
+  dataSourceSearchAriaLabel: 'Search {label} options',
+  dataSourceSearchPlaceholder: 'Enter a keyword',
+  dataSourceFocusPrompt: 'Focus the field to load options.',
+  dataSourceDependencyPrompt: 'Complete the related fields first.',
+  dataSourceLoading: 'Loading options…',
+  dataSourceLoadingLabel: 'Loading {label} options',
+  dataSourceEmpty: 'No options available.',
+  dataSourceError: 'Could not load options.',
+  dataSourceErrorLabel: 'Could not load {label} options',
+  dataSourceRetry: 'Retry',
+  dataSourceRetryLabel: 'Retry loading {label} options',
+  dataSourcePageError: 'Could not load more options.',
+  dataSourcePageErrorLabel: 'Could not load more {label} options',
+  dataSourcePageRetryLabel: 'Retry loading more {label} options',
+  dataSourceLoadMore: 'Load more',
+  dataSourceLoadMoreLabel: 'Load more options',
+  dataSourceLoadingMore: 'Loading…',
+  actionFailed: 'The action did not finish. Check the connection or host and try again.',
+  errorSummaryLabel: 'Form validation results',
+  errorSummaryTitle: 'Review {count} {fieldLabel}',
+  errorSummarySeparator: ': ',
+  actionButtonPending: 'Working…',
+  actionPending: 'Processing the form action.',
+  formValidationButtonPending: 'Validating…',
+  formValidationPending: 'Validating the form.',
+  formValidationPendingLabel: 'Validating form',
+  validationType: 'Expected {type}.',
+  validationMinLength: 'Enter at least {minimum} characters.',
+  validationMaxLength: 'Enter no more than {maximum} characters.',
+  validationPattern: 'Enter a value in the required format.',
+  validationInvalidPattern: 'The schema contains an invalid regular expression.',
+  validationFormat: 'The value must match the {format} format.',
+  validationMinimum: 'The value must be at least {minimum}.',
+  validationMaximum: 'The value must be no more than {maximum}.',
+  validationConst: 'The value must match the required constant.',
+  validationEnum: 'Select an allowed option.',
+  validationMinItems: 'Add at least {minimum} items.',
+  validationMaxItems: 'Add no more than {maximum} items.',
+  validationUniqueItems: 'Items must be unique.',
+  validationRequired: 'This field is required.',
+  validationAdditionalProperties: 'Additional properties are not allowed.',
+  validationRule: 'The value did not pass the business rule.',
+  asyncInvalidScope: 'The validation scope does not match this form.',
+  asyncUnavailable: 'Validation could not be completed. Try again.',
+  asyncInvalidResponse: 'The host returned an invalid validation response.',
+});
+
+const ZH_MESSAGES: Readonly<FormLocaleMessages> = Object.freeze({
+  checkboxEnabled: '启用',
+  selectPlaceholder: '请选择',
+  repeaterRemove: '移除',
+  repeaterAdd: '添加一项',
+  validationPending: '正在校验…',
+  validationPendingLabel: '正在校验{label}',
+  dataSourceSearchLabel: '搜索选项',
+  dataSourceSearchAriaLabel: '搜索 {label} 选项',
+  dataSourceSearchPlaceholder: '输入关键词',
+  dataSourceFocusPrompt: '聚焦字段后加载选项。',
+  dataSourceDependencyPrompt: '请先完成关联字段。',
+  dataSourceLoading: '正在加载选项…',
+  dataSourceLoadingLabel: '正在加载 {label} 选项',
+  dataSourceEmpty: '暂无可用选项。',
+  dataSourceError: '选项加载失败。',
+  dataSourceErrorLabel: '{label} 选项加载失败',
+  dataSourceRetry: '重试',
+  dataSourceRetryLabel: '重试加载 {label} 选项',
+  dataSourcePageError: '更多选项加载失败。',
+  dataSourcePageErrorLabel: '{label} 更多选项加载失败',
+  dataSourcePageRetryLabel: '重试加载 {label} 更多选项',
+  dataSourceLoadMore: '加载更多',
+  dataSourceLoadMoreLabel: '加载更多选项',
+  dataSourceLoadingMore: '加载中…',
+  actionFailed: '操作没有完成，请检查网络或宿主状态后重试。',
+  errorSummaryLabel: '表单校验结果',
+  errorSummaryTitle: '请检查 {count} 项内容',
+  errorSummarySeparator: '：',
+  actionButtonPending: '处理中…',
+  actionPending: '正在处理表单操作。',
+  formValidationButtonPending: '校验中…',
+  formValidationPending: '正在校验表单。',
+  formValidationPendingLabel: '正在校验表单',
+  validationType: '值类型必须是 {type}。',
+  validationMinLength: '至少输入 {minimum} 个字符。',
+  validationMaxLength: '最多输入 {maximum} 个字符。',
+  validationPattern: '输入内容格式不正确。',
+  validationInvalidPattern: 'Schema 中的正则表达式无效。',
+  validationFormat: '输入值必须符合 {format} 格式。',
+  validationMinimum: '数值不能小于 {minimum}。',
+  validationMaximum: '数值不能大于 {maximum}。',
+  validationConst: '输入值必须符合指定常量。',
+  validationEnum: '请选择允许的选项。',
+  validationMinItems: '至少需要 {minimum} 项。',
+  validationMaxItems: '最多允许 {maximum} 项。',
+  validationUniqueItems: '每一项都必须不同。',
+  validationRequired: '此项为必填项。',
+  validationAdditionalProperties: '不允许未声明的字段。',
+  validationRule: '输入未通过业务规则校验。',
+  asyncInvalidScope: '异步校验范围与当前表单不匹配。',
+  asyncUnavailable: '暂时无法完成校验，请重试。',
+  asyncInvalidResponse: '宿主返回了无效的异步校验结果。',
+});
+
+export const FORM_LOCALE_CATALOGS: Readonly<Record<'en' | 'zh', FormLocaleCatalog>> = Object.freeze(
+  {
+    en: Object.freeze({
+      apiVersion: FORM_LOCALE_CATALOG_API_VERSION,
+      locale: 'en',
+      messages: EN_MESSAGES,
+    }),
+    zh: Object.freeze({
+      apiVersion: FORM_LOCALE_CATALOG_API_VERSION,
+      locale: 'zh',
+      messages: ZH_MESSAGES,
+    }),
+  },
+);
+
+export function resolveFormLocaleCatalog(
+  locale = 'zh-CN',
+  override?: FormLocaleCatalogOverride,
+): FormLocaleCatalog {
+  const language = locale.toLowerCase().split('-')[0] === 'zh' ? 'zh' : 'en';
+  const base = FORM_LOCALE_CATALOGS[language];
+  const messages =
+    override?.apiVersion === FORM_LOCALE_CATALOG_API_VERSION
+      ? Object.freeze({ ...base.messages, ...override.messages })
+      : base.messages;
+  return Object.freeze({
+    apiVersion: FORM_LOCALE_CATALOG_API_VERSION,
+    locale,
+    messages,
+  });
+}
+
+export function formatFormMessage(
+  messages: Readonly<FormLocaleMessages>,
+  key: keyof FormLocaleMessages,
+  variables: Readonly<Record<string, string | number>> = {},
+): string {
+  return messages[key].replace(/\{([A-Za-z][A-Za-z0-9]*)\}/g, (token, name: string) =>
+    name in variables ? String(variables[name]) : token,
+  );
+}

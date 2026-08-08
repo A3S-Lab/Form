@@ -13,6 +13,7 @@ import {
   type FormDocument,
   type FormRef,
   type JsonObject,
+  FORM_LOCALE_CATALOG_API_VERSION,
 } from '@a3s-lab/form/core';
 import { FormRenderer } from '@a3s-lab/form/react';
 import {
@@ -58,6 +59,11 @@ function NodeSettings(props: {
       plan={pinned.plan}
       value={value}
       errors={errors.length > 0 ? errors : undefined}
+      locale="en-US"
+      localeCatalog={{
+        apiVersion: FORM_LOCALE_CATALOG_API_VERSION,
+        messages: { selectPlaceholder: 'Choose a model' },
+      }}
       onChange={(next) => {
         setErrors([]);
         setValue(next);
@@ -86,7 +92,9 @@ Every accepted plan identifies `a3s.dev/form-schema-profile/1`. A workflow host 
 
 ## Framework surfaces
 
-React is the reference runtime. Vue and Web Components expose the same host-facing configuration where it applies: controlled values, actions, external errors, locale, read-only state, host adapters, widget registries, and custom-node registries. The Designer adapters also accept compiler capabilities.
+React is the reference runtime. Vue and Web Components expose the same host-facing configuration where it applies: controlled values, actions, external errors, locale catalogs, read-only state, host adapters, widget registries, and custom-node registries. The Designer adapters also accept compiler capabilities.
+
+The locale catalog is host state, not form data. Keep organization wording, product terminology, and temporary copy changes outside `FormDocument`. See [Runtime localization](localization.md).
 
 Web Components are registered explicitly:
 
@@ -101,12 +109,15 @@ renderer.value = node.configuration;
 renderer.errors = hostErrors;
 renderer.hostAdapter = hostAdapter;
 renderer.locale = organization.locale;
+renderer.localeCatalog = organization.formLocaleCatalog;
 renderer.readOnly = !permissions.canEditNode;
 renderer.addEventListener('value-change', (event) => updateDraft(event.detail));
 renderer.addEventListener('form-action', (event) => runHostAction(event.detail));
 ```
 
 See [Host-owned asynchronous validation](async-validation.md) for the `validateValue` adapter contract and [Host-owned data sources](data-sources.md) for dependency-aware option loading, search, pagination, cache isolation, and cancellation.
+
+The compiler records each field's value, rule, and data-source dependencies in `FormPlan.nodeSubscriptions`. The React runtime uses that index to skip unrelated field renders. Event handlers and pagination still read the latest whole controlled value, so skipped renders cannot overwrite another node setting.
 
 ## CSS boundary
 

@@ -1,4 +1,5 @@
 import { evaluateExpression, expressionFieldPaths } from './expression';
+import { formatFormMessage, resolveFormLocaleCatalog } from './locale';
 import { getAtPath, removeAtPath, setAtPath } from './pointer';
 import { isSchemaFormatValid, jsonValuesEqual } from './schema-profile';
 import type {
@@ -6,18 +7,35 @@ import type {
   ComputedRuleEvaluationOptions,
   ComputedRuleTraceEntry,
   FieldError,
+  FormLocaleMessages,
   FormPlan,
+  FormRule,
   FormValueEvaluation,
+  FormValueEvaluationOptions,
+  IncrementalComputedRuleEvaluation,
   JsonObject,
   JsonSchema,
   JsonValue,
 } from './types';
+
+interface DependencySnapshot {
+  path: string;
+  present: boolean;
+  value?: JsonValue;
+}
+
+interface CachedComputedRule {
+  dependencies: DependencySnapshot[];
+  outputPresent: boolean;
+  output?: JsonValue;
+}
 
 function validateSchema(
   schema: JsonSchema,
   value: unknown,
   path: string,
   errors: FieldError[],
+  messages: Readonly<FormLocaleMessages>,
 ): void {
   if (value === undefined || value === null) return;
   const typeMatches =
@@ -29,55 +47,99 @@ function validateSchema(
     (schema.type === 'array' && Array.isArray(value)) ||
     (schema.type === 'object' && typeof value === 'object' && !Array.isArray(value));
   if (!typeMatches) {
-    errors.push({ path, code: 'type', message: `值类型必须是 ${schema.type}。` });
+    errors.push({
+      path,
+      code: 'type',
+      message: formatFormMessage(messages, 'validationType', { type: schema.type ?? '' }),
+    });
     return;
   }
   if (typeof value === 'string') {
     const length = [...value].length;
     if (schema.minLength !== undefined && length < schema.minLength)
-      errors.push({ path, code: 'minLength', message: `至少输入 ${schema.minLength} 个字符。` });
+      errors.push({
+        path,
+        code: 'minLength',
+        message: formatFormMessage(messages, 'validationMinLength', {
+          minimum: schema.minLength,
+        }),
+      });
     if (schema.maxLength !== undefined && length > schema.maxLength)
-      errors.push({ path, code: 'maxLength', message: `最多输入 ${schema.maxLength} 个字符。` });
+      errors.push({
+        path,
+        code: 'maxLength',
+        message: formatFormMessage(messages, 'validationMaxLength', {
+          maximum: schema.maxLength,
+        }),
+      });
     if (schema.pattern) {
       try {
         if (!new RegExp(schema.pattern, 'u').test(value))
-          errors.push({ path, code: 'pattern', message: '输入内容格式不正确。' });
+          errors.push({ path, code: 'pattern', message: messages.validationPattern });
       } catch {
-        errors.push({ path, code: 'pattern.invalid', message: 'Schema 中的正则表达式无效。' });
+        errors.push({
+          path,
+          code: 'pattern.invalid',
+          message: messages.validationInvalidPattern,
+        });
       }
     }
     if (schema.format && !isSchemaFormatValid(schema.format, value))
       errors.push({
         path,
         code: `format.${schema.format}`,
-        message: `The value must match the ${schema.format} format.`,
+        message: formatFormMessage(messages, 'validationFormat', { format: schema.format }),
       });
   }
   if (typeof value === 'number') {
     if (schema.minimum !== undefined && value < schema.minimum)
-      errors.push({ path, code: 'minimum', message: `数值不能小于 ${schema.minimum}。` });
+      errors.push({
+        path,
+        code: 'minimum',
+        message: formatFormMessage(messages, 'validationMinimum', {
+          minimum: schema.minimum,
+        }),
+      });
     if (schema.maximum !== undefined && value > schema.maximum)
-      errors.push({ path, code: 'maximum', message: `数值不能大于 ${schema.maximum}。` });
+      errors.push({
+        path,
+        code: 'maximum',
+        message: formatFormMessage(messages, 'validationMaximum', {
+          maximum: schema.maximum,
+        }),
+      });
   }
   if (schema.const !== undefined && !jsonValuesEqual(schema.const, value))
-    errors.push({ path, code: 'const', message: 'The value must match the required constant.' });
+    errors.push({ path, code: 'const', message: messages.validationConst });
   if (schema.enum && !schema.enum.some((item) => jsonValuesEqual(item, value)))
-    errors.push({ path, code: 'enum', message: '请选择允许的选项。' });
+    errors.push({ path, code: 'enum', message: messages.validationEnum });
   if (Array.isArray(value)) {
     if (schema.minItems !== undefined && value.length < schema.minItems)
-      errors.push({ path, code: 'minItems', message: `至少需要 ${schema.minItems} 项。` });
+      errors.push({
+        path,
+        code: 'minItems',
+        message: formatFormMessage(messages, 'validationMinItems', {
+          minimum: schema.minItems,
+        }),
+      });
     if (schema.maxItems !== undefined && value.length > schema.maxItems)
-      errors.push({ path, code: 'maxItems', message: `最多允许 ${schema.maxItems} 项。` });
+      errors.push({
+        path,
+        code: 'maxItems',
+        message: formatFormMessage(messages, 'validationMaxItems', {
+          maximum: schema.maxItems,
+        }),
+      });
     if (
       schema.uniqueItems &&
       value.some((item, index) =>
         value.slice(0, index).some((previous) => jsonValuesEqual(previous, item)),
       )
     )
-      errors.push({ path, code: 'uniqueItems', message: 'Array items must be unique.' });
+      errors.push({ path, code: 'uniqueItems', message: messages.validationUniqueItems });
     if (schema.items)
       value.forEach((item, index) => {
-        validateSchema(schema.items as JsonSchema, item, `${path}.${index}`, errors);
+        validateSchema(schema.items as JsonSchema, item, `${path}.${index}`, errors, messages);
       });
   }
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -87,11 +149,11 @@ function validateSchema(
         errors.push({
           path: path ? `${path}.${required}` : required,
           code: 'required',
-          message: '此项为必填项。',
+          message: messages.validationRequired,
         });
     }
     for (const [key, child] of Object.entries(schema.properties ?? {}))
-      validateSchema(child, object[key], path ? `${path}.${key}` : key, errors);
+      validateSchema(child, object[key], path ? `${path}.${key}` : key, errors, messages);
     for (const [key, childValue] of Object.entries(object)) {
       if (key in (schema.properties ?? {})) continue;
       const childPath = path ? `${path}.${key}` : key;
@@ -99,10 +161,10 @@ function validateSchema(
         errors.push({
           path: childPath,
           code: 'additionalProperties',
-          message: 'Additional properties are not allowed.',
+          message: messages.validationAdditionalProperties,
         });
       } else if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
-        validateSchema(schema.additionalProperties, childValue, childPath, errors);
+        validateSchema(schema.additionalProperties, childValue, childPath, errors, messages);
       }
     }
   }
@@ -122,6 +184,175 @@ function traceValues(
   if (previousValue !== undefined) entry.previousValue = structuredClone(previousValue);
   if (nextValue !== undefined) entry.nextValue = structuredClone(nextValue);
   return entry;
+}
+
+function snapshotDependencies(value: JsonObject, paths: readonly string[]): DependencySnapshot[] {
+  return paths.map((path) => {
+    const dependency = getAtPath(value, path) as JsonValue | undefined;
+    return dependency === undefined
+      ? { path, present: false }
+      : { path, present: true, value: structuredClone(dependency) };
+  });
+}
+
+function dependencySnapshotsEqual(
+  left: readonly DependencySnapshot[],
+  right: readonly DependencySnapshot[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((entry, index) => {
+    const candidate = right[index];
+    if (!candidate || entry.path !== candidate.path || entry.present !== candidate.present) {
+      return false;
+    }
+    return !entry.present || jsonValuesEqual(entry.value, candidate.value);
+  });
+}
+
+function applyComputedOutput(
+  value: JsonObject,
+  path: string,
+  nextValue: JsonValue | undefined,
+  unchanged: boolean,
+): JsonObject {
+  if (unchanged) return value;
+  return nextValue === undefined ? removeAtPath(value, path) : setAtPath(value, path, nextValue);
+}
+
+export class IncrementalComputedRuleEvaluator {
+  #plan?: FormPlan;
+  #cache = new Map<string, CachedComputedRule>();
+  #computedRules = new Map<string, FormRule>();
+  #targetByPath = new Map<string, string>();
+
+  clear(): void {
+    this.#plan = undefined;
+    this.#cache.clear();
+    this.#computedRules.clear();
+    this.#targetByPath.clear();
+  }
+
+  evaluate(
+    plan: FormPlan,
+    value: JsonObject,
+    options: ComputedRuleEvaluationOptions = {},
+  ): IncrementalComputedRuleEvaluation {
+    this.#setPlan(plan);
+    let current = structuredClone(value);
+    const trace: ComputedRuleTraceEntry[] = [];
+    const errors: FieldError[] = [];
+    const evaluatedRuleIds: string[] = [];
+    const reusedRuleIds: string[] = [];
+    const failedTargets = new Set<string>();
+
+    for (const target of plan.dependencyOrder) {
+      const rule = this.#computedRules.get(target);
+      const path = plan.nodeById[target]?.valuePath;
+      if (!rule || !path) continue;
+      const dependencies = [
+        ...(plan.ruleDependencies?.[rule.id] ?? expressionFieldPaths(rule.expression).sort()),
+      ];
+      const previousValue = getAtPath(current, path) as JsonValue | undefined;
+      const failedDependencies = dependencies
+        .map((dependency) => this.#targetByPath.get(dependency))
+        .filter((dependency): dependency is string => Boolean(dependency))
+        .filter((dependency) => failedTargets.has(dependency));
+      if (failedDependencies.length > 0) {
+        this.#cache.delete(target);
+        current = removeAtPath(current, path);
+        failedTargets.add(target);
+        const message = `Computed rule ${rule.id} was skipped because a dependency failed.`;
+        errors.push({ path, code: `rule.${rule.id}.dependency`, message });
+        trace.push(
+          traceValues(
+            {
+              ruleId: rule.id,
+              target,
+              path,
+              dependencies,
+              status: 'skipped',
+              error: message,
+            },
+            previousValue,
+            undefined,
+            Boolean(options.includeValues),
+          ),
+        );
+        continue;
+      }
+
+      const dependencySnapshot = snapshotDependencies(current, dependencies);
+      const cached = this.#cache.get(target);
+      try {
+        const reused = Boolean(
+          cached && dependencySnapshotsEqual(cached.dependencies, dependencySnapshot),
+        );
+        const nextValue = reused
+          ? cached?.outputPresent
+            ? structuredClone(cached.output as JsonValue)
+            : undefined
+          : evaluateExpression(rule.expression, current, {
+              maxOperations: plan.expressionOperationLimit,
+            });
+        if (reused) reusedRuleIds.push(rule.id);
+        else {
+          evaluatedRuleIds.push(rule.id);
+          this.#cache.set(target, {
+            dependencies: dependencySnapshot,
+            outputPresent: nextValue !== undefined,
+            ...(nextValue === undefined ? {} : { output: structuredClone(nextValue) }),
+          });
+        }
+        const unchanged = valuesEqual(previousValue, nextValue);
+        const status = unchanged ? 'unchanged' : nextValue === undefined ? 'removed' : 'set';
+        current = applyComputedOutput(current, path, nextValue, unchanged);
+        trace.push(
+          traceValues(
+            { ruleId: rule.id, target, path, dependencies, status },
+            previousValue,
+            nextValue,
+            Boolean(options.includeValues),
+          ),
+        );
+      } catch (error) {
+        this.#cache.delete(target);
+        evaluatedRuleIds.push(rule.id);
+        current = removeAtPath(current, path);
+        failedTargets.add(target);
+        const message = String(error);
+        errors.push({ path, code: `rule.${rule.id}.evaluation`, message });
+        trace.push(
+          traceValues(
+            {
+              ruleId: rule.id,
+              target,
+              path,
+              dependencies,
+              status: 'error',
+              error: message,
+            },
+            previousValue,
+            undefined,
+            Boolean(options.includeValues),
+          ),
+        );
+      }
+    }
+    return { value: current, trace, errors, evaluatedRuleIds, reusedRuleIds };
+  }
+
+  #setPlan(plan: FormPlan): void {
+    if (this.#plan === plan) return;
+    this.clear();
+    this.#plan = plan;
+    this.#computedRules = new Map(
+      plan.rules.filter((rule) => rule.kind === 'computed').map((rule) => [rule.target, rule]),
+    );
+    for (const target of this.#computedRules.keys()) {
+      const path = plan.nodeById[target]?.valuePath;
+      if (path) this.#targetByPath.set(path, target);
+    }
+  }
 }
 
 export function evaluateComputedRules(
@@ -222,11 +453,15 @@ export function evaluateComputedRules(
 export function evaluateFormValue(
   plan: FormPlan,
   value: JsonObject,
-  options: ComputedRuleEvaluationOptions = {},
+  options: FormValueEvaluationOptions = {},
 ): FormValueEvaluation {
   const computed = evaluateComputedRules(plan, value, options);
   const errors = [...computed.errors];
-  validateSchema(plan.schema, computed.value, '', errors);
+  const messages = resolveFormLocaleCatalog(
+    options.locale ?? plan.metadata.locale,
+    options.localeCatalog,
+  ).messages;
+  validateSchema(plan.schema, computed.value, '', errors, messages);
   for (const rule of plan.rules) {
     if (rule.kind !== 'validate') continue;
     let valid = false;
@@ -250,15 +485,19 @@ export function evaluateFormValue(
       errors.push({
         path: node?.valuePath ?? rule.target,
         code: `rule.${rule.id}`,
-        message: rule.message ?? '输入未通过业务规则校验。',
+        message: rule.message ?? messages.validationRule,
       });
     }
   }
   return { ...computed, errors };
 }
 
-export function validateFormValue(plan: FormPlan, value: JsonObject): FieldError[] {
-  return evaluateFormValue(plan, value).errors;
+export function validateFormValue(
+  plan: FormPlan,
+  value: JsonObject,
+  options: FormValueEvaluationOptions = {},
+): FieldError[] {
+  return evaluateFormValue(plan, value, options).errors;
 }
 
 export function fieldState(

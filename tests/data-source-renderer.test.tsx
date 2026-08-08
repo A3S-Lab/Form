@@ -285,6 +285,41 @@ describe('React data-source orchestration', () => {
     expect(screen.queryByRole('option', { name: 'GPT-5' })).toBeNull();
   });
 
+  it('passes the latest whole form value when an unrelated field changes before pagination', async () => {
+    const document = createDataSourceDocument();
+    if (!document.dataSources) throw new Error('Missing data-source fixture.');
+    document.dataSources[0].pageSize = 1;
+    const requests: DataSourceRequest[] = [];
+    render(
+      <Harness
+        document={document}
+        initialValue={{ provider: 'openai', note: 'first' }}
+        hostAdapter={{
+          resolveDataSource: async (request) => {
+            requests.push(request);
+            return request.cursor
+              ? { options: [{ label: 'Second model', value: 'second' }] }
+              : {
+                  options: [{ label: 'First model', value: 'first' }],
+                  nextCursor: 'page-2',
+                };
+          },
+        }}
+      />,
+    );
+
+    expect(await screen.findByRole('option', { name: 'First model' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'latest' } });
+    fireEvent.click(screen.getByRole('button', { name: '加载更多选项' }));
+    expect(await screen.findByRole('option', { name: 'Second model' })).toBeTruthy();
+    expect(requests.at(-1)).toEqual(
+      expect.objectContaining({
+        cursor: 'page-2',
+        value: expect.objectContaining({ note: 'latest' }),
+      }),
+    );
+  });
+
   it('fails closed with retry instead of leaking host errors', async () => {
     const originalWarn = console.warn;
     console.warn = () => undefined;

@@ -560,6 +560,7 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
   const ruleIds = new Set<string>();
   const computedTargets = new Set<string>();
   const validRules: FormRule[] = [];
+  const ruleDependencies: Record<string, string[]> = {};
   for (const [index, rule] of rules.entries()) {
     if (
       !isRecord(rule) ||
@@ -631,6 +632,7 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
           ),
         );
       }
+      ruleDependencies[rule.id] = [...analysis.fieldPaths].sort();
       validRules.push(rule);
     } catch {
       diagnostics.push(
@@ -656,6 +658,20 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
     };
   });
   const nodeById = Object.fromEntries(normalizedNodes.map((node) => [node.id, node]));
+  const dataSourceById = new Map(normalized.dataSources?.map((source) => [source.id, source]));
+  const nodeSubscriptions = Object.fromEntries(
+    normalizedNodes.map((node) => {
+      const paths = new Set<string>();
+      if (node.valuePath) paths.add(node.valuePath);
+      for (const rule of normalized.rules ?? []) {
+        if (rule.target !== node.id) continue;
+        for (const path of ruleDependencies[rule.id] ?? []) paths.add(path);
+      }
+      const source = node.dataSource ? dataSourceById.get(node.dataSource) : undefined;
+      for (const path of source?.dependencies ?? []) paths.add(path);
+      return [node.id, [...paths].sort()];
+    }),
+  );
   const plan: FormPlan = {
     apiVersion: 'a3s.dev/form-plan/v1alpha1',
     schemaProfile: A3S_FORM_SCHEMA_PROFILE_1_ID,
@@ -667,6 +683,8 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
     nodes: normalizedNodes,
     nodeById,
     rules: normalized.rules ?? [],
+    ruleDependencies,
+    nodeSubscriptions,
     expressionOperationLimit: limits.maxExpressionOperations,
     dependencyOrder,
     dataSources: normalized.dataSources ?? [],

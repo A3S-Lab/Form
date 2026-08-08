@@ -11,6 +11,9 @@ The current development baseline includes:
 - computed fields use a stable dependency order, bounded calculations, stale-output removal, and an inspectable execution trace;
 - field blur and primary submit support host-owned async validation with cancellation and stable issue mapping;
 - host-owned option sources support declared dependencies, focus triggers, isolated TTL caching, deduplication, cancellation, search, pagination, and accessible failure states;
+- compiled field subscriptions prevent unrelated fields from rerendering, while event and pagination callbacks retain the latest controlled host value;
+- `a3s.dev/form-locale-catalog/v1` supplies English and Chinese runtime copy with React, Vue, Web Component, and Designer-preview host overrides;
+- CI benchmarks compile, validation, incremental evaluation, and server rendering at 100, 500, and 1,000 nodes;
 - existing `a3s-form-*` selectors and controlled interfaces remain compatible.
 
-Read the [workflow-node embedding guide](/next/guide/workflow-node-embedding) for host ownership boundaries, [Schema Profile 1](/next/guide/schema-profile-1) for the accepted validation contract, [computed rules](/next/guide/computed-rules) for derived node parameters, [async validation](/next/guide/async-validation) for protected business checks, and [data sources](/next/guide/data-sources) for dynamic node options. These changes remain in `next` and do not create a new compatibility commitment until released.
+Read the [workflow-node embedding guide](/next/guide/workflow-node-embedding) for host ownership boundaries, [Schema Profile 1](/next/guide/schema-profile-1) for the accepted validation contract, [computed rules](/next/guide/computed-rules) for derived node parameters, [async validation](/next/guide/async-validation) for protected business checks, [data sources](/next/guide/data-sources) for dynamic node options, and [localization and performance](/next/guide/localization-performance) for host copy and runtime budgets. These changes remain in `next` and do not create a new compatibility commitment until released.

@@ -58,9 +58,12 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 - Computed fields use a stable topological order, bounded arithmetic and branching, stale-output removal, dependency failure propagation, and an opt-in value trace.
 - Host-owned field and form validation is cancellable, rejects stale responses, maps server issues to stable codes, and has React, Vue, Web Component, Cloud, and Dify-like host coverage.
 - Host-owned data sources now provide declared dependencies, mount/focus triggers, per-host TTL caching, in-flight deduplication, cancellation, debounced search, cursor pagination, strict response validation, and accessible loading/empty/error/retry states.
-- Remaining v0.2 work starts with field subscriptions and incremental evaluation, then locale catalogs and performance gates.
+- Compiled field subscriptions now limit React updates to a field's own value, targeted rule dependencies, and declared data-source dependencies. Computed rules reuse cached outputs until those dependencies change.
+- Runtime copy and synchronous validation use the versioned `a3s.dev/form-locale-catalog/v1` contract. English and Chinese ship with the package; React, Vue, Web Components, and Designer preview accept host overrides.
+- CI now benchmarks compilation, validation, incremental evaluation, and server rendering for 100, 500, and 1,000-node forms against explicit budgets.
+- Remaining v0.2 work is release hardening: compatibility review, final browser evidence, package publication, and migration notes.
 
-### Planned capabilities
+### Release-candidate capabilities
 
 - Stabilize and publish **A3S Form Schema Profile 1** with its explicit keyword allowlist, canonical semantics, conformance fixtures, and diagnostics for every unsupported keyword.
 - Publish a host-neutral workflow-node configuration contract for Dify-like settings panels, including node identity, a configuration-mode `FormRef`, controlled values, locale/read-only context, and digest-pinned validation.
@@ -69,9 +72,9 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 - Stabilize the complete `visible`, `enabled`, `computed`, and `validate` rule runtime for release, including deterministic dependency evaluation, cycle diagnostics, and an inspectable execution trace.
 - Stabilize and publish cancellable field-level and form-level asynchronous validation with stable server-error mapping.
 - Stabilize and publish data-source dependencies and triggers, `cacheTtlMs`, request deduplication, debounce, cancellation, search, pagination, and loading/empty/error/retry states.
-- Introduce field-level subscriptions and incremental rule evaluation so unrelated edits do not rerender or refetch unrelated nodes.
-- Replace hard-coded runtime messages with versioned locale catalogs and host overrides.
-- Publish repeatable compiler, validation, and render benchmarks for 100, 500, and 1,000-node documents.
+- Release field-level subscriptions and incremental rule evaluation so unrelated edits do not rerender or refetch unrelated nodes.
+- Release versioned runtime locale catalogs and host overrides without serializing organization copy into form documents.
+- Publish the repeatable compiler, validation, incremental-update, and render benchmark for 100, 500, and 1,000-node documents.
 
 ### Exit criteria
 

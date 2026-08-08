@@ -5,7 +5,9 @@ import {
   type DataSourceDefinition,
   type DataSourceLease,
   type FormHostAdapter,
+  type FormLocaleMessages,
   type FormPlan,
+  formatFormMessage,
   getAtPath,
   type JsonObject,
   type JsonValue,
@@ -39,6 +41,7 @@ export interface FormDataSourceState {
 
 interface UseFormDataSourceOptions {
   coordinator: DataSourceCoordinator;
+  getValue: () => JsonObject;
   hostAdapter?: FormHostAdapter;
   locale: string;
   node: UiNode;
@@ -61,6 +64,7 @@ function mergeOptions(current: UiOption[], incoming: UiOption[]): UiOption[] {
 
 export function useFormDataSource({
   coordinator,
+  getValue,
   hostAdapter,
   locale,
   node,
@@ -74,8 +78,6 @@ export function useFormDataSource({
   );
   const staticOptions = node.options;
   const resolver = hostAdapter?.resolveDataSource;
-  const valueRef = useRef(value);
-  valueRef.current = value;
   const [activated, setActivated] = useState(false);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -166,7 +168,7 @@ export function useFormDataSource({
       resolver(
         {
           definition,
-          value: structuredClone(valueRef.current),
+          value: structuredClone(getValue()),
           locale,
           query: debouncedQuery || undefined,
           limit: definition.pageSize,
@@ -196,6 +198,7 @@ export function useFormDataSource({
     debouncedQuery,
     definition,
     dependenciesReady,
+    getValue,
     locale,
     requestKey,
     resolver,
@@ -217,7 +220,8 @@ export function useFormDataSource({
     }
     const generation = generationRef.current;
     const cursor = nextCursor;
-    const key = createDataSourceRequestKey(plan, definition, valueRef.current, {
+    const value = getValue();
+    const key = createDataSourceRequestKey(plan, definition, value, {
       locale,
       query: debouncedQuery || undefined,
       cursor,
@@ -228,7 +232,7 @@ export function useFormDataSource({
       resolver(
         {
           definition,
-          value: structuredClone(valueRef.current),
+          value: structuredClone(value),
           locale,
           query: debouncedQuery || undefined,
           cursor,
@@ -260,6 +264,7 @@ export function useFormDataSource({
     coordinator,
     debouncedQuery,
     definition,
+    getValue,
     loadingMore,
     locale,
     nextCursor,
@@ -288,16 +293,24 @@ export function useFormDataSource({
   };
 }
 
-export function DataSourceSearch({ label, state }: { label: string; state: FormDataSourceState }) {
+export function DataSourceSearch({
+  label,
+  messages,
+  state,
+}: {
+  label: string;
+  messages: Readonly<FormLocaleMessages>;
+  state: FormDataSourceState;
+}) {
   if (!state.searchable) return null;
   return (
     <label className="a3s-form-data-source-search">
-      <span>搜索选项</span>
+      <span>{messages.dataSourceSearchLabel}</span>
       <input
         type="search"
         className="input"
-        aria-label={`搜索 ${label} 选项`}
-        placeholder="输入关键词"
+        aria-label={formatFormMessage(messages, 'dataSourceSearchAriaLabel', { label })}
+        placeholder={messages.dataSourceSearchPlaceholder}
         disabled={state.status === 'blocked'}
         value={state.query}
         onFocus={state.activate}
@@ -307,43 +320,62 @@ export function DataSourceSearch({ label, state }: { label: string; state: FormD
   );
 }
 
-export function DataSourceStatus({ label, state }: { label: string; state: FormDataSourceState }) {
+export function DataSourceStatus({
+  label,
+  messages,
+  state,
+}: {
+  label: string;
+  messages: Readonly<FormLocaleMessages>;
+  state: FormDataSourceState;
+}) {
   if (!state.definition || state.status === 'static' || state.status === 'ready') {
     if (!state.hasMore && !state.pageError) return null;
   }
   return (
     <div className="a3s-form-data-source-status" data-status={state.status}>
-      {state.status === 'idle' && <span>聚焦字段后加载选项。</span>}
-      {state.status === 'blocked' && <span role="status">请先完成关联字段。</span>}
+      {state.status === 'idle' && <span>{messages.dataSourceFocusPrompt}</span>}
+      {state.status === 'blocked' && (
+        <span role="status">{messages.dataSourceDependencyPrompt}</span>
+      )}
       {state.status === 'loading' && (
-        <span role="status" aria-label={`正在加载 ${label} 选项`}>
-          正在加载选项…
+        <span
+          role="status"
+          aria-label={formatFormMessage(messages, 'dataSourceLoadingLabel', { label })}
+        >
+          {messages.dataSourceLoading}
         </span>
       )}
-      {state.status === 'empty' && <span role="status">暂无可用选项。</span>}
+      {state.status === 'empty' && <span role="status">{messages.dataSourceEmpty}</span>}
       {state.status === 'error' && (
-        <div role="alert" aria-label={`${label} 选项加载失败`}>
-          <span>选项加载失败。</span>
+        <div
+          role="alert"
+          aria-label={formatFormMessage(messages, 'dataSourceErrorLabel', { label })}
+        >
+          <span>{messages.dataSourceError}</span>
           <button
             type="button"
             className="btn"
             onClick={state.retry}
-            aria-label={`重试加载 ${label} 选项`}
+            aria-label={formatFormMessage(messages, 'dataSourceRetryLabel', { label })}
           >
-            重试
+            {messages.dataSourceRetry}
           </button>
         </div>
       )}
       {state.pageError && state.status !== 'error' && (
-        <div role="alert" aria-label={`${label} 更多选项加载失败`}>
-          <span>更多选项加载失败。</span>
+        <div
+          role="alert"
+          aria-label={formatFormMessage(messages, 'dataSourcePageErrorLabel', { label })}
+        >
+          <span>{messages.dataSourcePageError}</span>
           <button
             type="button"
             className="btn"
             onClick={state.retry}
-            aria-label={`重试加载 ${label} 更多选项`}
+            aria-label={formatFormMessage(messages, 'dataSourcePageRetryLabel', { label })}
           >
-            重试
+            {messages.dataSourceRetry}
           </button>
         </div>
       )}
@@ -355,9 +387,9 @@ export function DataSourceStatus({ label, state }: { label: string; state: FormD
           data-variant="secondary"
           disabled={state.loadingMore}
           onClick={state.loadMore}
-          aria-label="加载更多选项"
+          aria-label={messages.dataSourceLoadMoreLabel}
         >
-          {state.loadingMore ? '加载中…' : '加载更多'}
+          {state.loadingMore ? messages.dataSourceLoadingMore : messages.dataSourceLoadMore}
         </button>
       )}
     </div>

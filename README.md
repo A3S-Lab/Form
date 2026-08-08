@@ -80,8 +80,8 @@ A basic schema renderer only draws inputs. A3S Form gives design, preview, runti
 | Surface | Implemented capabilities |
 | --- | --- |
 | **Form Designer** | Published A3S UI component contracts, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, focused preview, responsive component/canvas/settings panels, undo/redo, save feedback, and compiler diagnostics |
-| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, validation summaries, error focus, cancellable host validation, async action states, complete rule execution, host-resolved option sources, custom nodes, and primitive repeaters |
-| **Form Compiler** | Input boundaries, semantic validation, dependency-cycle detection, capability checks, canonical SHA-256, immutable `FormPlan`, and a cancellable Worker |
+| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, field-level subscriptions, localized validation summaries, cancellable host validation, async action states, host-resolved option sources, custom nodes, and primitive repeaters |
+| **Form Compiler** | Input boundaries, Schema Profile 1 validation, rule and node dependency indexes, cycle detection, capability checks, canonical SHA-256, immutable `FormPlan`, and a cancellable Worker |
 | **Agent Interface** | JSON CLI, revision-bound `FormPatch`, in-Designer JSON preflight and conflict feedback, `$a3s-form` skill, machine-readable diagnostics, and atomic changes |
 
 Core invariants:
@@ -102,7 +102,7 @@ Authoring and runtime behavior:
 - Draft actions receive the current controlled value without being blocked by required-field validation. Submit actions run synchronous and host-owned asynchronous validation, show a summary, and focus the first invalid field.
 
 > [!IMPORTANT]
-> The v0.1 contract is a foundation, not a claim of full JSON Schema or enterprise-form parity. The `next` baseline closes schema, computed-rule, embedding, async-validation, and dynamic data-source gaps; complex repeatable groups, field-level subscriptions, complete localization, and draft/release collaboration remain planned work. See the [product roadmap](ROADMAP.md) for scope and release gates.
+> The v0.1 contract is a foundation, not a claim of full JSON Schema or enterprise-form parity. The unreleased `next` baseline now covers Schema Profile 1, computed rules, host-neutral embedding, async validation, dynamic data sources, field subscriptions, runtime locale catalogs, and large-form budgets. Complex repeatable groups and draft/release collaboration remain planned work. See the [product roadmap](ROADMAP.md) for scope and release gates.
 
 ### Minimal React embedding
 
@@ -179,6 +179,10 @@ The development compiler enforces [A3S Form Schema Profile 1](docs/schema-profil
 
 [Host-owned data sources](docs/data-sources.md) load workflow-node options through approved host registries. Declared dependencies prevent unrelated refetches; focus triggers, isolated TTL caches, request deduplication, search, pagination, cancellation, and accessible failure states share one React/Vue/Web Component contract.
 
+[Runtime localization](docs/localization.md) uses one versioned catalog across core validation, React, Vue, Web Components, and Designer preview. Host overrides change product copy without changing or republishing a `FormDocument`.
+
+[Performance budgets](docs/performance.md) cover compilation, validation, incremental computed-rule updates, and server rendering at 100, 500, and 1,000 nodes. The same benchmark runs in CI.
+
 <a id="embedding"></a>
 
 ## Embedding Boundaries for A3S Cloud and Workflow
@@ -196,7 +200,7 @@ Supported exports:
 
 | Export | Purpose |
 | --- | --- |
-| `@a3s-lab/form/core` | Documents, compilation, validation, patches, templates, and headless state |
+| `@a3s-lab/form/core` | Documents, compilation, validation, locale catalogs, patches, templates, and headless state |
 | `@a3s-lab/form/react` | React Designer and Renderer |
 | `@a3s-lab/form/vue` | Vue 3 `v-model` adapter |
 | `@a3s-lab/form/web-component` | `<a3s-form-designer>` and `<a3s-form-renderer>` |
@@ -259,15 +263,15 @@ Current full runtime coverage:
 
 | Metric | Coverage |
 | --- | ---: |
-| Statements | **97.39%** |
-| Branches | **95.04%** |
-| Functions | **97.25%** |
-| Lines | **98.73%** |
+| Statements | **97.45%** |
+| Branches | **95.09%** |
+| Functions | **97.24%** |
+| Lines | **98.77%** |
 
-- All 224 unit and cross-framework integration tests pass.
+- All 233 unit and cross-framework integration tests pass.
 - The repository includes local A3S Test flows covering Designer → focused Preview → validation → action, host-owned field validation, responsive mobile authoring, browser-local persistence, and validated JSON import.
 - A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
-- CI installs locked dependencies and runs linting, type checks, coverage gates, package/CLI builds, documentation builds, and the Playground build.
+- CI installs locked dependencies and runs linting, type checks, coverage gates, 100/500/1,000-node performance budgets, package/CLI builds, documentation builds, and the Playground build.
 
 ```bash
 bun run check

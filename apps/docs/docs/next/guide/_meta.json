@@ -4,5 +4,6 @@
   "schema-profile-1",
   "computed-rules",
   "async-validation",
-  "data-sources"
+  "data-sources",
+  "localization-performance"
 ]

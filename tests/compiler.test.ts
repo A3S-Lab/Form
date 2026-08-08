@@ -24,6 +24,14 @@ describe('form compiler', () => {
     expect(result.plan?.nodeById.name.valuePath).toBe('name');
     expect(result.plan?.nodeById.root.children).toEqual(['name', 'age', 'active', 'role']);
     expect(result.plan?.dependencyOrder).toEqual([]);
+    expect(result.plan?.ruleDependencies).toEqual({ 'show-age': ['active'] });
+    expect(result.plan?.nodeSubscriptions).toEqual({
+      root: [],
+      name: ['name'],
+      age: ['active', 'age'],
+      active: ['active'],
+      role: ['role'],
+    });
     expect(Object.isFrozen(result.plan)).toBe(true);
     expect(Object.isFrozen(result.plan?.nodes)).toBe(true);
     expect(source.digest).toBeUndefined();
@@ -217,6 +225,14 @@ describe('form compiler', () => {
       debounceMs: 250,
       pageSize: 50,
     });
+  });
+
+  it('adds declared data-source paths to field subscriptions', () => {
+    const document = createDocument();
+    if (!document.dataSources) throw new Error('Missing fixture data source.');
+    document.dataSources[0].dependencies = ['active', 'name'];
+    const plan = assertCompiled(document);
+    expect(plan.nodeSubscriptions.role).toEqual(['active', 'name', 'role']);
   });
 
   it('validates rule definitions, size, targets, duplicates and dependency cycles', () => {

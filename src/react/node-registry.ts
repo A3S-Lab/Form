@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react';
 import type {
   CompiledNode,
   FieldError,
+  FormLocaleMessages,
   FormPlan,
   JsonObject,
   JsonSchema,
@@ -34,6 +35,7 @@ export interface FormNodeRenderProps {
   plan: FormPlan;
   value: JsonValue | undefined;
   formValue: JsonObject;
+  messages: Readonly<FormLocaleMessages>;
   disabled: boolean;
   invalid: boolean;
   errors: FieldError[];

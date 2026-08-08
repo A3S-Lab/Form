@@ -4,6 +4,7 @@ import type {
   FieldError,
   FormDocument,
   FormHostAdapter,
+  FormLocaleCatalogOverride,
   FormRef,
   JsonObject,
 } from '../src/core';
@@ -26,6 +27,7 @@ export interface DifyLikeWorkflowNodeProps {
   compileOptions?: CompileOptions;
   hostAdapter?: FormHostAdapter;
   locale?: string;
+  localeCatalog?: FormLocaleCatalogOverride;
   nodeRegistry?: FormNodeRegistry;
   readOnly?: boolean;
   widgetRegistry?: FormWidgetRegistry;
@@ -73,6 +75,7 @@ export function DifyLikeWorkflowNode(props: DifyLikeWorkflowNodeProps) {
       errors={hostErrors.length > 0 ? hostErrors : undefined}
       hostAdapter={props.hostAdapter}
       locale={props.locale}
+      localeCatalog={props.localeCatalog}
       nodeRegistry={props.nodeRegistry}
       readOnly={props.readOnly}
       widgetRegistry={props.widgetRegistry}

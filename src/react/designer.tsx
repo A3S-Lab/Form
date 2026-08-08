@@ -43,6 +43,7 @@ export interface FormDesignerProps {
   errors?: FormRendererProps['errors'];
   readOnly?: boolean;
   locale?: string;
+  localeCatalog?: FormRendererProps['localeCatalog'];
   className?: string;
 }
 
@@ -669,6 +670,7 @@ export function FormDesigner(props: FormDesignerProps) {
                 errors={props.errors}
                 readOnly={props.readOnly}
                 locale={props.locale}
+                localeCatalog={props.localeCatalog}
                 widgetRegistry={props.widgetRegistry}
                 nodeRegistry={props.nodeRegistry}
               />

@@ -1,0 +1,91 @@
+import {
+  type DataSourceCoordinator,
+  type FieldError,
+  type FormHostAdapter,
+  type FormPlan,
+  getAtPath,
+  type JsonObject,
+  jsonValuesEqual,
+} from '../core';
+
+export interface SubscribedNodeRenderProps {
+  plan: FormPlan;
+  nodeId: string;
+  value: JsonObject;
+  errorMap: ReadonlyMap<string, readonly FieldError[]>;
+  validatingPaths: ReadonlySet<string>;
+  dataSourceCoordinator: DataSourceCoordinator;
+  getValue: () => JsonObject;
+  onChange: (value: JsonObject) => void;
+  onFieldBlur: (nodeId: string, path: string) => void;
+  prefix: string;
+  hostAdapter?: FormHostAdapter;
+  widgetRegistry?: unknown;
+  nodeRegistry?: unknown;
+  readOnly?: boolean;
+  locale?: string;
+  messages: unknown;
+  suppressHeading?: boolean;
+}
+
+function valuesAtPathEqual(left: JsonObject, right: JsonObject, path: string): boolean {
+  const leftValue = getAtPath(left, path);
+  const rightValue = getAtPath(right, path);
+  if (leftValue === undefined || rightValue === undefined) return leftValue === rightValue;
+  return jsonValuesEqual(leftValue, rightValue);
+}
+
+function errorsAtPathEqual(
+  left: ReadonlyMap<string, readonly FieldError[]>,
+  right: ReadonlyMap<string, readonly FieldError[]>,
+  path: string | undefined,
+): boolean {
+  if (!path) return true;
+  const leftErrors = left.get(path) ?? [];
+  const rightErrors = right.get(path) ?? [];
+  if (leftErrors === rightErrors) return true;
+  if (leftErrors.length !== rightErrors.length) return false;
+  return leftErrors.every((error, index) => {
+    const candidate = rightErrors[index];
+    return (
+      candidate !== undefined &&
+      error.path === candidate.path &&
+      error.code === candidate.code &&
+      error.message === candidate.message
+    );
+  });
+}
+
+export function subscribedNodePropsEqual(
+  left: Readonly<SubscribedNodeRenderProps>,
+  right: Readonly<SubscribedNodeRenderProps>,
+): boolean {
+  if (
+    left.plan !== right.plan ||
+    left.nodeId !== right.nodeId ||
+    left.dataSourceCoordinator !== right.dataSourceCoordinator ||
+    left.getValue !== right.getValue ||
+    left.onChange !== right.onChange ||
+    left.onFieldBlur !== right.onFieldBlur ||
+    left.prefix !== right.prefix ||
+    left.hostAdapter !== right.hostAdapter ||
+    left.widgetRegistry !== right.widgetRegistry ||
+    left.nodeRegistry !== right.nodeRegistry ||
+    left.readOnly !== right.readOnly ||
+    left.locale !== right.locale ||
+    left.messages !== right.messages ||
+    left.suppressHeading !== right.suppressHeading
+  ) {
+    return false;
+  }
+
+  const node = left.plan.nodeById[left.nodeId];
+  const valuePath = node?.valuePath;
+  if (!errorsAtPathEqual(left.errorMap, right.errorMap, valuePath)) return false;
+  if (valuePath && left.validatingPaths.has(valuePath) !== right.validatingPaths.has(valuePath)) {
+    return false;
+  }
+  const subscriptions = left.plan.nodeSubscriptions?.[left.nodeId];
+  if (!subscriptions) return false;
+  return subscriptions.every((path) => valuesAtPathEqual(left.value, right.value, path));
+}

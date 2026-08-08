@@ -171,7 +171,9 @@ export function validateWorkflowNodeConfiguration(
     };
   }
 
-  const evaluation = evaluateFormValue(verification.plan, descriptor.value);
+  const evaluation = evaluateFormValue(verification.plan, descriptor.value, {
+    locale: descriptor.locale,
+  });
   if (evaluation.errors.length > 0) {
     return { ok: false, errors: evaluation.errors, digest: verification.digest };
   }

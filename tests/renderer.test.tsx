@@ -63,6 +63,45 @@ describe('React FormRenderer', () => {
     await waitFor(() => expect(action).toBe('submit'));
   });
 
+  it('uses locale catalogs for runtime copy and host overrides', async () => {
+    const document = createDocument();
+    document.metadata.locale = 'en-US';
+    const plan = assertCompiled(document);
+    const localeCatalog = {
+      apiVersion: 'a3s.dev/form-locale-catalog/v1' as const,
+      messages: { selectPlaceholder: 'Choose a workflow role' },
+    };
+    const view = render(
+      <FormRenderer
+        plan={plan}
+        value={{}}
+        onChange={() => undefined}
+        localeCatalog={localeCatalog}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: 'Choose a workflow role' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    expect(await screen.findByText('This field is required.')).toBeTruthy();
+    expect(screen.getByRole('alert', { name: 'Form validation results' })).toBeTruthy();
+    expect(screen.getByText('Review 1 field')).toBeTruthy();
+    view.rerender(
+      <FormRenderer
+        plan={plan}
+        value={{}}
+        errors={[
+          { path: 'name', code: 'host.name', message: 'Check the node name.' },
+          { path: 'host', code: 'host.connection', message: 'Reconnect the workflow host.' },
+        ]}
+        localeCatalog={localeCatalog}
+        onChange={() => undefined}
+      />,
+    );
+    expect(screen.getByText('Review 2 fields')).toBeTruthy();
+    expect(screen.getByText('Reconnect the workflow host.')).toBeTruthy();
+    view.unmount();
+  });
+
   it('renders computed fields as read-only and submits the derived controlled value', async () => {
     const document = createDocument();
     document.schema = {
@@ -171,7 +210,7 @@ describe('React FormRenderer', () => {
 
     render(<AsyncFieldHarness />);
     fireEvent.blur(screen.getByLabelText('姓名'));
-    expect(await screen.findByRole('status', { name: '正在校验姓名' })).toBeTruthy();
+    expect(await screen.findByRole('status', { name: 'Validating 姓名' })).toBeTruthy();
     expect(received).toEqual(
       expect.objectContaining({
         scope: { kind: 'field', nodeId: 'name', path: 'name' },
@@ -182,7 +221,7 @@ describe('React FormRenderer', () => {
 
     resolve?.({ issues: [{ code: 'name_taken', message: 'This name is already in use.' }] });
     expect(await screen.findByText('This name is already in use.')).toBeTruthy();
-    expect(screen.queryByRole('status', { name: '正在校验姓名' })).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Validating 姓名' })).toBeNull();
     expect(screen.getByLabelText('姓名').getAttribute('aria-invalid')).toBe('true');
   });
 
@@ -436,6 +475,134 @@ describe('React FormRenderer', () => {
     const customButton = screen.getByRole('button', { name: '自定义字段' });
     fireEvent.click(customButton);
     expect(customButton.textContent).toBe('custom-value');
+  });
+
+  it('rerenders only fields subscribed to the changed value path', async () => {
+    const document = createDocument();
+    document.schema = {
+      type: 'object',
+      properties: {
+        first: { type: 'string' },
+        second: { type: 'string' },
+        note: { type: 'string' },
+      },
+      additionalProperties: false,
+    };
+    document.ui.nodes = [
+      { id: 'root', kind: 'root', children: ['first', 'second', 'note'] },
+      {
+        id: 'first',
+        kind: 'field',
+        label: 'First',
+        schemaPath: '/properties/first',
+        widget: 'test.counting',
+      },
+      {
+        id: 'second',
+        kind: 'field',
+        label: 'Second',
+        schemaPath: '/properties/second',
+        widget: 'test.counting',
+      },
+      {
+        id: 'note',
+        kind: 'field',
+        label: 'Note',
+        schemaPath: '/properties/note',
+        widget: 'test.counting',
+      },
+    ];
+    document.dataSources = [];
+    document.actions = [];
+    document.rules = [
+      {
+        id: 'second-enabled-by-first',
+        target: 'second',
+        kind: 'enabled',
+        expression: { op: 'exists', value: { op: 'field', path: 'first' } },
+      },
+    ];
+    const plan = assertCompiled(document, { capabilities: { widgets: ['test.counting'] } });
+    const renders = { first: 0, second: 0, note: 0 };
+    function CountingWidget({ node, value, onChange }: FormWidgetProps) {
+      renders[node.id as keyof typeof renders] += 1;
+      return (
+        <input
+          aria-label={node.label}
+          value={String(value ?? '')}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      );
+    }
+    const widgetRegistry = { 'test.counting': CountingWidget };
+
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({
+        first: 'on',
+        second: 'two',
+        note: 'one',
+      });
+      return (
+        <>
+          <FormRenderer
+            plan={plan}
+            value={value}
+            onChange={setValue}
+            widgetRegistry={widgetRegistry}
+          />
+          <output data-testid="subscription-value">{JSON.stringify(value)}</output>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    await waitFor(() => expect(screen.getByLabelText('Note')).toBeTruthy());
+    const initial = { ...renders };
+
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'changed' } });
+    await waitFor(() => expect(renders.note).toBeGreaterThan(initial.note));
+    expect(renders.first).toBe(initial.first);
+    expect(renders.second).toBe(initial.second);
+
+    const afterNote = { ...renders };
+    fireEvent.change(screen.getByLabelText('First'), { target: { value: 'updated' } });
+    await waitFor(() => expect(renders.first).toBeGreaterThan(afterNote.first));
+    expect(renders.second).toBeGreaterThan(afterNote.second);
+    expect(renders.note).toBe(afterNote.note);
+    expect(screen.getByTestId('subscription-value').textContent).toContain('"note":"changed"');
+  });
+
+  it('rerenders conservatively for a transported plan without subscription metadata', () => {
+    const plan = structuredClone(assertCompiled(createDocument()));
+    delete (plan as Partial<typeof plan>).nodeSubscriptions;
+    let renders = 0;
+    function CountingWidget(props: FormWidgetProps) {
+      renders += 1;
+      return (
+        <input
+          aria-label={props.node.label}
+          value={String(props.value ?? '')}
+          onChange={(event) => props.onChange(event.target.value)}
+        />
+      );
+    }
+    const widgetRegistry = { text: CountingWidget };
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({ name: 'first' });
+      return (
+        <FormRenderer
+          plan={plan}
+          value={value}
+          widgetRegistry={widgetRegistry}
+          onChange={setValue}
+        />
+      );
+    }
+
+    render(<Harness />);
+    const initial = renders;
+    fireEvent.change(screen.getByLabelText('姓名'), { target: { value: 'second' } });
+    expect(renders).toBeGreaterThan(initial);
   });
 
   it('projects required, invalid and locale states through A3S UI contracts', () => {

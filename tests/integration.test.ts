@@ -118,7 +118,9 @@ describe('Workflow and Cloud seams', () => {
       expect.objectContaining({
         ok: false,
         digest: form.digest,
-        errors: expect.arrayContaining([expect.objectContaining({ path: 'name' })]),
+        errors: expect.arrayContaining([
+          expect.objectContaining({ path: 'name', message: 'This field is required.' }),
+        ]),
       }),
     );
     expect(

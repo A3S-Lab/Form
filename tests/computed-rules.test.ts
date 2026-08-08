@@ -7,6 +7,7 @@ import {
   type FormDocument,
   type FormExpression,
   fieldState,
+  IncrementalComputedRuleEvaluator,
   type JsonObject,
   validateFormValue,
 } from '../src/core';
@@ -142,9 +143,42 @@ describe('computed form rules', () => {
     expect(repeated.trace.every((entry) => entry.status === 'unchanged')).toBe(true);
   });
 
+  it('reuses computed outputs until a declared dependency changes', () => {
+    const document = computedDocument();
+    if (!document.schema.properties) throw new Error('Missing computed schema properties.');
+    document.schema.properties.note = { type: 'string' };
+    const plan = assertCompiled(document);
+    const evaluator = new IncrementalComputedRuleEvaluator();
+    const base: JsonObject = { quantity: 2, unitPrice: 50, taxRate: 0.1, note: 'first' };
+
+    const first = evaluator.evaluate(plan, base);
+    expect(first.evaluatedRuleIds).toEqual([
+      'derive-subtotal',
+      'derive-tax',
+      'derive-total',
+      'derive-summary',
+    ]);
+    expect(first.reusedRuleIds).toEqual([]);
+
+    const unrelated = evaluator.evaluate(plan, { ...first.value, note: 'second' });
+    expect(unrelated.evaluatedRuleIds).toEqual([]);
+    expect(unrelated.reusedRuleIds).toEqual(first.evaluatedRuleIds);
+    expect(unrelated.value.total).toBe(110);
+
+    const changed = evaluator.evaluate(plan, { ...unrelated.value, quantity: 3 });
+    expect(changed.evaluatedRuleIds).toEqual(first.evaluatedRuleIds);
+    expect(changed.reusedRuleIds).toEqual([]);
+    expect(changed.value).toEqual(expect.objectContaining({ subtotal: 150, tax: 15, total: 165 }));
+
+    evaluator.clear();
+    expect(evaluator.evaluate(plan, changed.value).evaluatedRuleIds).toEqual(
+      first.evaluatedRuleIds,
+    );
+  });
+
   it('removes stale outputs and skips dependent rules after an evaluation failure', () => {
     const plan = assertCompiled(computedDocument());
-    const result = evaluateComputedRules(plan, {
+    const invalidValue = {
       quantity: 'invalid',
       unitPrice: 50,
       taxRate: 0.1,
@@ -152,7 +186,8 @@ describe('computed form rules', () => {
       tax: 99,
       total: 1098,
       summary: 'stale',
-    } as never);
+    } as never;
+    const result = evaluateComputedRules(plan, invalidValue);
 
     expect(result.value).toEqual({ quantity: 'invalid', unitPrice: 50, taxRate: 0.1 });
     expect(result.trace.map((entry) => entry.status)).toEqual([
@@ -166,6 +201,22 @@ describe('computed form rules', () => {
         expect.objectContaining({ path: 'subtotal', code: 'rule.derive-subtotal.evaluation' }),
         expect.objectContaining({ path: 'tax', code: 'rule.derive-tax.dependency' }),
       ]),
+    );
+
+    const evaluator = new IncrementalComputedRuleEvaluator();
+    evaluator.evaluate(plan, { quantity: 2, unitPrice: 50, taxRate: 0.1 });
+    const incremental = evaluator.evaluate(plan, invalidValue, { includeValues: true });
+    expect(incremental.value).toEqual({ quantity: 'invalid', unitPrice: 50, taxRate: 0.1 });
+    expect(incremental.trace.map((entry) => entry.status)).toEqual([
+      'error',
+      'skipped',
+      'skipped',
+      'skipped',
+    ]);
+    expect(incremental.evaluatedRuleIds).toEqual(['derive-subtotal']);
+    expect(incremental.reusedRuleIds).toEqual([]);
+    expect(incremental.trace[0]).toEqual(
+      expect.objectContaining({ previousValue: 999, error: expect.any(String) }),
     );
   });
 
@@ -197,6 +248,17 @@ describe('computed form rules', () => {
     expect(unchanged.trace[0].status).toBe('unchanged');
     expect(unchanged.trace[0]).not.toHaveProperty('previousValue');
     expect(unchanged.trace[0]).not.toHaveProperty('nextValue');
+
+    const evaluator = new IncrementalComputedRuleEvaluator();
+    const incrementalRemoved = evaluator.evaluate(plan, {
+      quantity: 1,
+      unitPrice: 1,
+      total: 1,
+      summary: 'stale',
+    });
+    const incrementalReused = evaluator.evaluate(plan, incrementalRemoved.value);
+    expect(incrementalReused.reusedRuleIds).toEqual(['derive-summary']);
+    expect(incrementalReused.value.summary).toBeUndefined();
   });
 
   it('fails closed when validation and field-state expressions cannot run', () => {
@@ -242,11 +304,24 @@ describe('computed form rules', () => {
 
   it('ignores stale dependency-order entries in a manually transported plan', () => {
     const plan = structuredClone(assertCompiled(computedDocument()));
+    const legacyPlan = structuredClone(plan);
+    delete (legacyPlan as Partial<typeof legacyPlan>).ruleDependencies;
+    expect(
+      new IncrementalComputedRuleEvaluator().evaluate(legacyPlan, {
+        quantity: 2,
+        unitPrice: 50,
+        taxRate: 0.1,
+      }).value.total,
+    ).toBe(110);
     plan.dependencyOrder.unshift('missing-target');
     expect(() => evaluateComputedRules(plan, { quantity: 1, unitPrice: 1 })).not.toThrow();
+    const evaluator = new IncrementalComputedRuleEvaluator();
+    expect(() => evaluator.evaluate(plan, { quantity: 1, unitPrice: 1 })).not.toThrow();
 
     delete plan.nodeById.subtotal.valuePath;
     expect(() => evaluateComputedRules(plan, { quantity: 1, unitPrice: 1 })).not.toThrow();
+    evaluator.clear();
+    expect(() => evaluator.evaluate(plan, { quantity: 1, unitPrice: 1 })).not.toThrow();
   });
 
   it('uses computed values for validation and digest-pinned workflow commits', () => {
