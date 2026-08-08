@@ -19,7 +19,8 @@ export type ProductIconName =
   | 'save'
   | 'search'
   | 'sparkles'
-  | 'template';
+  | 'template'
+  | 'upload';
 
 export interface ProductIconProps extends SVGProps<SVGSVGElement> {
   name: ProductIconName;
@@ -224,6 +225,15 @@ export function ProductIcon({ name, size = 18, ...props }: ProductIconProps) {
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth="1.6"
+        />
+      )}
+      {name === 'upload' && (
+        <path
+          d="M12 16V5m0 0L7.5 9.5M12 5l4.5 4.5M5 19h14"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
         />
       )}
     </svg>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ProductIcon } from './icons';
 import { countFormFields, type PlaygroundFormRecord } from './workspace';
 
@@ -11,6 +11,7 @@ export interface WorkspaceViewProps {
   storageAvailable: boolean;
   onOpen: (formId: string) => void;
   onCreate: (title: string, description: string, template: WorkspaceTemplateId) => void;
+  onImport: (file: File) => void | Promise<void>;
 }
 
 function formatUpdatedAt(value: string): string {
@@ -43,6 +44,9 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
   const workflowCount = props.forms.filter(isWorkflowForm).length;
   const fieldCount = props.forms.reduce(
     (total, record) => total + countFormFields(record.document),
@@ -63,18 +67,50 @@ export function WorkspaceView(props: WorkspaceViewProps) {
     });
   }, [collection, query, sortedForms]);
 
+  const closeCreate = useCallback(() => {
+    setCreating(false);
+    window.requestAnimationFrame(() => lastFocusedRef.current?.focus());
+  }, []);
+
   useEffect(() => {
     if (!creating) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setCreating(false);
+    const handleDialogKeys = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeCreate();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+      );
+      if (!controls?.length) return;
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && window.document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && window.document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('keydown', handleDialogKeys);
     const focusFrame = window.requestAnimationFrame(() => titleInputRef.current?.focus());
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      window.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('keydown', handleDialogKeys);
     };
-  }, [creating]);
+  }, [closeCreate, creating]);
+
+  useEffect(() => {
+    const closeSidebarOnCompactViewport = () => {
+      if (window.innerWidth < 840) setSidebarOpen(false);
+    };
+
+    closeSidebarOnCompactViewport();
+    window.addEventListener('resize', closeSidebarOnCompactViewport);
+    return () => window.removeEventListener('resize', closeSidebarOnCompactViewport);
+  }, []);
 
   const chooseTemplate = (nextTemplate: WorkspaceTemplateId) => {
     setTemplate(nextTemplate);
@@ -88,6 +124,8 @@ export function WorkspaceView(props: WorkspaceViewProps) {
   };
 
   const openCreate = (nextTemplate: WorkspaceTemplateId = 'blank') => {
+    lastFocusedRef.current =
+      window.document.activeElement instanceof HTMLElement ? window.document.activeElement : null;
     chooseTemplate(nextTemplate);
     setCreating(true);
   };
@@ -256,8 +294,8 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 </button>
               )}
               <div>
-                <span>A3S Form</span>
                 <h1>我的表单</h1>
+                <p>设计、校验和预览，都在当前浏览器里完成。</p>
               </div>
             </div>
             <div className="playground-home-actions">
@@ -315,7 +353,25 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 description="包含字段与显隐规则"
                 onClick={() => openCreate('onboarding')}
               />
+              <TemplateCard
+                icon="upload"
+                title="导入表单 JSON"
+                description="校验后加入当前工作区"
+                onClick={() => importInputRef.current?.click()}
+              />
             </div>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              aria-label="导入表单 JSON"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void props.onImport(file);
+                event.target.value = '';
+              }}
+            />
           </section>
 
           <section className="playground-recent-section" aria-labelledby="recent-title">
@@ -381,13 +437,15 @@ export function WorkspaceView(props: WorkspaceViewProps) {
             type="button"
             className="playground-dialog-dismiss"
             aria-label="点击遮罩关闭新建表单"
-            onClick={() => setCreating(false)}
+            onClick={closeCreate}
           />
           <section
+            ref={dialogRef}
             className="playground-dialog card"
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-form-title"
+            aria-describedby="create-form-description"
           >
             <header>
               <div>
@@ -396,7 +454,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 </span>
                 <span>
                   <strong id="create-form-title">创建表单</strong>
-                  <small>选择起点，命名后进入设计器</small>
+                  <small id="create-form-description">选择起点，命名后进入设计器</small>
                 </span>
               </div>
               <button
@@ -405,7 +463,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 data-size="icon-sm"
                 data-variant="ghost"
                 aria-label="关闭新建表单"
-                onClick={() => setCreating(false)}
+                onClick={closeCreate}
               >
                 <ProductIcon name="close" size={17} />
               </button>
@@ -488,7 +546,7 @@ export function WorkspaceView(props: WorkspaceViewProps) {
                 type="button"
                 className="playground-secondary btn"
                 data-variant="secondary"
-                onClick={() => setCreating(false)}
+                onClick={closeCreate}
               >
                 取消
               </button>
@@ -516,7 +574,7 @@ function TemplateCard({
   description,
   onClick,
 }: {
-  icon: 'file' | 'form';
+  icon: 'file' | 'form' | 'upload';
   title: string;
   description: string;
   onClick: () => void;

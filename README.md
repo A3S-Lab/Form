@@ -78,10 +78,10 @@ A basic schema renderer only draws inputs. A3S Form gives design, preview, runti
 
 | Surface | Implemented capabilities |
 | --- | --- |
-| **Form Designer** | Published A3S UI component contracts, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, live preview, undo/redo, and compiler diagnostics |
-| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, validation, rules, data sources, custom nodes, and repeaters |
+| **Form Designer** | Published A3S UI component contracts, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, focused preview, responsive component/canvas/settings panels, undo/redo, save feedback, and compiler diagnostics |
+| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, validation summaries, error focus, async action states, rules, data sources, custom nodes, and repeaters |
 | **Form Compiler** | Input boundaries, semantic validation, dependency-cycle detection, capability checks, canonical SHA-256, immutable `FormPlan`, and a cancellable Worker |
-| **Agent Interface** | JSON CLI, revision-bound `FormPatch`, `$a3s-form` skill, machine-readable diagnostics, and atomic changes |
+| **Agent Interface** | JSON CLI, revision-bound `FormPatch`, in-Designer JSON preflight and conflict feedback, `$a3s-form` skill, machine-readable diagnostics, and atomic changes |
 
 Core invariants:
 
@@ -90,6 +90,14 @@ Core invariants:
 - AI submits bounded patches; revision conflicts fail instead of overwriting newer human work.
 - Components emit values and actions only. Persistence, identity, authorization, secrets, and side effects belong to the host.
 - Documents never execute arbitrary JavaScript. Widget, data-source, and action keys resolve only through host-approved registries.
+
+Authoring and runtime behavior:
+
+- The Playground imports a JSON document only after it compiles successfully, then adds it to the browser-local workspace.
+- Preview mode removes the component catalog and inspector so the real form runtime owns the canvas. On compact screens, authoring switches between dedicated Components, Canvas, and Settings panels without horizontal overflow.
+- Save actions expose saving, saved, and failed states. `Cmd/Ctrl+S` uses the same save path as the toolbar action.
+- The Agent panel accepts deterministic `FormPatch` JSON, shows the current revision and protocol, validates the payload before applying it, and reports revision conflicts without mutating the document.
+- Draft actions receive the current controlled value without being blocked by required-field validation. Submit actions validate, show a summary, and focus the first invalid field.
 
 ### Minimal React embedding
 
@@ -227,8 +235,8 @@ Current full runtime coverage:
 | Functions | **97.93%** |
 | Lines | **99.08%** |
 
-- All 125 unit and cross-framework integration tests pass.
-- The repository includes a local A3S Test flow covering Designer → Preview → validation → action.
+- All 131 unit and cross-framework integration tests pass.
+- The repository includes local A3S Test flows covering Designer → focused Preview → validation → action, responsive mobile authoring, browser-local persistence, and validated JSON import.
 - A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
 - CI installs locked dependencies and runs linting, type checks, coverage gates, package/CLI builds, documentation builds, and the Playground build.
 

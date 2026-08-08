@@ -451,9 +451,21 @@ describe('React FormRenderer', () => {
     expect(screen.queryByText('补充页内容')).toBeNull();
     expect(screen.getByText('下一部分')).toBeTruthy();
     expect(window.document.querySelector('.a3s-form-spacer')).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: '补充资料' }));
+    const basic = screen.getByRole('tab', { name: '基本资料' });
+    fireEvent.keyDown(basic, { key: 'End' });
     expect(screen.getByText('补充页内容')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '补充资料' }).getAttribute('tabindex')).toBe('0');
     expect(screen.queryByText('基本页内容')).toBeNull();
+    fireEvent.keyDown(screen.getByRole('tab', { name: '补充资料' }), { key: 'Home' });
+    expect(screen.getByText('基本页内容')).toBeTruthy();
+    fireEvent.keyDown(basic, { key: 'ArrowLeft' });
+    expect(screen.getByText('补充页内容')).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('tab', { name: '补充资料' }), { key: 'ArrowRight' });
+    expect(screen.getByText('基本页内容')).toBeTruthy();
+    fireEvent.keyDown(basic, { key: 'PageDown' });
+    expect(screen.getByText('基本页内容')).toBeTruthy();
+    fireEvent.keyDown(basic, { key: 'ArrowRight' });
+    expect(screen.getByText('补充页内容')).toBeTruthy();
     expect(screen.getByText('通知设置')).toBeTruthy();
     expect(screen.getByText('权限设置')).toBeTruthy();
     expect(screen.getByText('通知内容')).toBeTruthy();
@@ -472,6 +484,21 @@ describe('React FormRenderer', () => {
       label: '保存草稿',
       tone: 'secondary',
     });
+    document.actions?.push(
+      {
+        id: 'delete',
+        registryKey: 'test.delete',
+        label: '删除记录',
+        tone: 'danger',
+      },
+      {
+        id: 'inspect',
+        registryKey: 'test.inspect',
+        label: '检查数据',
+      },
+    );
+    const role = document.ui.nodes.find((node) => node.id === 'role');
+    if (role) role.label = undefined;
     const plan = assertCompiled(document);
     const calls: string[] = [];
     const { rerender } = render(
@@ -489,8 +516,16 @@ describe('React FormRenderer', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+    await waitFor(() => expect(calls).toEqual(['draft']));
     fireEvent.click(screen.getByRole('button', { name: '提交' }));
     await waitFor(() => expect(calls).toEqual(['draft', 'submit']));
+    const dangerAction = screen.getByRole('button', { name: '删除记录' });
+    expect(dangerAction.getAttribute('data-variant')).toBe('destructive');
+    expect(dangerAction.className).toContain('a3s-form-danger');
+    fireEvent.click(dangerAction);
+    await waitFor(() => expect(calls).toEqual(['draft', 'submit', 'delete']));
+    fireEvent.click(screen.getByRole('button', { name: '检查数据' }));
+    await waitFor(() => expect(calls).toEqual(['draft', 'submit', 'delete', 'inspect']));
     rerender(
       <FormRenderer
         plan={plan}
@@ -499,18 +534,89 @@ describe('React FormRenderer', () => {
         errors={[
           { path: 'name', code: 'one', message: '错误一' },
           { path: 'name', code: 'two', message: '错误二' },
+          { path: 'role', code: 'role', message: '角色错误' },
+          { path: 'missing', code: 'missing', message: '表单级错误' },
         ]}
         readOnly
         className="embedded-form"
         locale="zh-Hans"
       />,
     );
-    expect(screen.getByText('错误一')).toBeTruthy();
-    expect(screen.getByText('错误二')).toBeTruthy();
+    expect(screen.getAllByText(/错误一/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/错误二/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'role：角色错误' })).toBeTruthy();
+    expect(screen.getByText('表单级错误')).toBeTruthy();
     expect(screen.getByLabelText('姓名').getAttribute('aria-invalid')).toBe('true');
     expect((screen.getByLabelText('姓名') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: '提交' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByLabelText('姓名').closest('form')?.className).toContain('embedded-form');
+  });
+
+  it('saves incomplete drafts while keeping primary submission validation', async () => {
+    const document = createDocument();
+    document.actions?.unshift({
+      id: 'draft',
+      registryKey: 'test.draft',
+      label: '保存草稿',
+      tone: 'secondary',
+    });
+    const calls: string[] = [];
+    render(
+      <FormRenderer
+        plan={assertCompiled(document)}
+        value={{}}
+        onChange={() => undefined}
+        onAction={(id) => {
+          calls.push(id);
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+    await waitFor(() => expect(calls).toEqual(['draft']));
+    expect(screen.queryByRole('alert', { name: '表单校验结果' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    expect(screen.getByRole('alert', { name: '表单校验结果' })).toBeTruthy();
+    expect(screen.getByText('请检查 1 项内容')).toBeTruthy();
+    expect(calls).toEqual(['draft']);
+  });
+
+  it('locks actions while pending and reports rejected host actions', async () => {
+    let resolveAction: (() => void) | undefined;
+    const plan = assertCompiled(createDocument());
+    const pendingView = render(
+      <FormRenderer
+        plan={plan}
+        value={{ name: '张三' }}
+        onChange={() => undefined}
+        onAction={() =>
+          new Promise<void>((resolve) => {
+            resolveAction = resolve;
+          })
+        }
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    const pending = screen.getByRole('button', { name: '处理中…' }) as HTMLButtonElement;
+    expect(pending.disabled).toBe(true);
+    expect(pending.closest('form')?.getAttribute('aria-busy')).toBe('true');
+    resolveAction?.();
+    await waitFor(() => expect(screen.getByRole('button', { name: '提交' })).toBeTruthy());
+    pendingView.unmount();
+
+    render(
+      <FormRenderer
+        plan={plan}
+        value={{ name: '张三' }}
+        onChange={() => undefined}
+        onAction={async () => {
+          throw new Error('host unavailable');
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    expect(await screen.findByText('操作没有完成，请检查网络或宿主状态后重试。')).toBeTruthy();
   });
 
   it('reports host data-source failures only while mounted', async () => {

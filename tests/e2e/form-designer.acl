@@ -65,7 +65,7 @@ suite "a3s-form-designer" {
         }
 
         click "validation-settings" {
-            target = css(".a3s-form-panel-tabs.is-inspector button:nth-child(2)")
+            target = role("tab", "校验")
         }
 
         expect "validation-ready" {
@@ -77,7 +77,7 @@ suite "a3s-form-designer" {
         }
 
         click "open-structure" {
-            target = role("button", "结构")
+            target = role("tab", "结构")
         }
 
         click "select-start-date" {
@@ -85,7 +85,7 @@ suite "a3s-form-designer" {
         }
 
         click "start-date-validation" {
-            target = css(".a3s-form-panel-tabs.is-inspector button:nth-child(2)")
+            target = role("tab", "校验")
         }
 
         expect "start-date-validation-ready" {
@@ -106,6 +106,10 @@ suite "a3s-form-designer" {
 
         expect "preview-updated" {
             text = "工龄"
+        }
+
+        expect "preview-is-focused" {
+            visible = css(".a3s-form-designer[data-mode='preview'] .a3s-form-designer-main.is-preview > .a3s-form-canvas .a3s-form-renderer")
         }
 
         expect "renderer-uses-a3s-fields" {
@@ -178,7 +182,7 @@ suite "a3s-form-designer" {
         }
 
         click "open-components" {
-            target = role("button", "组件")
+            target = role("tab", "组件")
         }
 
         click "select-root" {
@@ -258,6 +262,14 @@ suite "a3s-form-designer" {
         expect "document-saved" {
             text = "已保存"
         }
+
+        press "save-shortcut" {
+            key = "Meta+s"
+        }
+
+        expect "shortcut-saved" {
+            text = "已保存到当前浏览器。"
+        }
     }
 
     scenario "create-and-restore-local-form" {
@@ -322,6 +334,105 @@ suite "a3s-form-designer" {
 
         expect "restored-form-card" {
             visible = css("[aria-label='打开客户满意度调查']")
+        }
+    }
+
+    scenario "mobile-authoring-and-preview" {
+        name = "移动端设计与聚焦预览"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open-mobile-workspace" {
+            url = "http://127.0.0.1:4176/"
+        }
+
+        viewport "mobile" {
+            width = 390
+            height = 844
+        }
+
+        wait "mobile-workspace-ready" {
+            text = "我的表单"
+        }
+
+        expect "mobile-navigation-closed" {
+            visible = css("main.app-shell[data-mobile-navigation='closed'] [data-app-main]")
+        }
+
+        click "open-mobile-form" {
+            target = role("button", "打开新员工入职申请")
+        }
+
+        wait "mobile-editor-ready" {
+            text = "表单画布"
+        }
+
+        expect "mobile-panel-navigation" {
+            visible = css(".a3s-form-mobile-panel-bar")
+        }
+
+        click "mobile-components" {
+            target = role("button", "组件")
+        }
+
+        expect "mobile-catalog" {
+            visible = css(".is-mobile-panel-components .a3s-form-palette")
+        }
+
+        click "mobile-canvas" {
+            target = role("button", "画布")
+        }
+
+        expect "mobile-canvas-visible" {
+            visible = css(".is-mobile-panel-canvas .a3s-form-canvas")
+        }
+
+        click "mobile-preview" {
+            target = role("button", "预览")
+        }
+
+        expect "mobile-focused-preview" {
+            visible = css(".a3s-form-designer[data-mode='preview'] .a3s-form-renderer")
+        }
+
+        screenshot "mobile-preview-evidence" {
+            path = "screenshots/mobile-focused-preview.png"
+        }
+    }
+
+    scenario "import-validated-form-json" {
+        name = "导入并校验 A3S Form JSON"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open-import-workspace" {
+            url = "http://127.0.0.1:4176/"
+        }
+
+        viewport "import-desktop" {
+            width = 1440
+            height = 1000
+        }
+
+        wait "import-workspace-ready" {
+            text = "我的表单"
+        }
+
+        upload "import-form" {
+            target = css("input[aria-label='导入表单 JSON']")
+            paths = ["tests/fixtures/import-form.json"]
+        }
+
+        wait "imported-editor-ready" {
+            text = "导入验收表单"
+        }
+
+        expect "imported-document-compiled" {
+            text = "编译通过"
+        }
+
+        expect "imported-field-ready" {
+            visible = css("[data-node-id='project-name']")
         }
     }
 }

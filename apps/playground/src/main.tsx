@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { compileForm, type FormDocument, type JsonObject } from '../../../src/core';
 import { FormDesigner } from '../../../src/react';
@@ -20,6 +20,13 @@ import { type WorkspaceTemplateId, WorkspaceView } from './workspace-view';
 const playgroundCapabilities = { widgets: Object.keys(playgroundNodeRegistry) };
 const playgroundSeeds = [{ id: 'employee-onboarding', document: sampleForm }, ...workflowFormSeeds];
 
+type StorageState = 'saving' | 'saved' | 'error';
+
+interface PlaygroundNotice {
+  message: string;
+  tone: 'success' | 'error';
+}
+
 function createFormId(): string {
   return `form-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`;
 }
@@ -36,9 +43,10 @@ function App() {
   );
   const [surface, setSurface] = useState<'workspace' | 'editor'>('workspace');
   const [value, setValue] = useState<JsonObject>({});
-  const [saved, setSaved] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [storageState, setStorageState] = useState<StorageState>('saved');
+  const [notice, setNotice] = useState<PlaygroundNotice>();
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const noticeTimer = useRef<number | undefined>(undefined);
   const activeRecord =
     workspace.forms.find((record) => record.id === workspace.activeFormId) ?? workspace.forms[0];
   const document = activeRecord?.document ?? sampleForm;
@@ -47,8 +55,27 @@ function App() {
     [document],
   );
 
+  const showNotice = useCallback((message: string, tone: PlaygroundNotice['tone'] = 'success') => {
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    setNotice({ message, tone });
+    noticeTimer.current = window.setTimeout(() => setNotice(undefined), 2800);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
   useEffect(() => {
-    setStorageAvailable(savePlaygroundWorkspace(localStorage, workspace));
+    setStorageState('saving');
+    const timer = window.setTimeout(() => {
+      const available = savePlaygroundWorkspace(localStorage, workspace);
+      setStorageAvailable(available);
+      setStorageState(available ? 'saved' : 'error');
+    }, 240);
+    return () => window.clearTimeout(timer);
   }, [workspace]);
 
   const openForm = (formId: string) => {
@@ -80,11 +107,25 @@ function App() {
     setWorkspace((current) => updateWorkspaceDocument(current, activeRecord.id, next));
   };
 
-  const save = () => {
-    setStorageAvailable(savePlaygroundWorkspace(localStorage, workspace));
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1600);
-  };
+  const save = useCallback(() => {
+    const available = savePlaygroundWorkspace(localStorage, workspace);
+    setStorageAvailable(available);
+    setStorageState(available ? 'saved' : 'error');
+    showNotice(
+      available ? '已保存到当前浏览器。' : '保存失败，请检查浏览器存储权限。',
+      available ? 'success' : 'error',
+    );
+  }, [showNotice, workspace]);
+
+  useEffect(() => {
+    const handleSaveShortcut = (event: KeyboardEvent) => {
+      if ((!event.metaKey && !event.ctrlKey) || event.key.toLocaleLowerCase() !== 's') return;
+      event.preventDefault();
+      save();
+    };
+    window.addEventListener('keydown', handleSaveShortcut);
+    return () => window.removeEventListener('keydown', handleSaveShortcut);
+  }, [save]);
 
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(compilation.document ?? document, null, 2)], {
@@ -96,11 +137,42 @@ function App() {
     });
     link.click();
     URL.revokeObjectURL(link.href);
+    showNotice('表单 JSON 已导出。');
+  };
+
+  const importJson = async (file: File) => {
+    try {
+      const input: unknown = JSON.parse(await file.text());
+      const result = compileForm(input, { capabilities: playgroundCapabilities });
+      if (!result.ok || !result.document) {
+        showNotice(
+          `导入失败：${result.diagnostics[0]?.message ?? '文件不是有效的 A3S Form 文档。'}`,
+          'error',
+        );
+        return;
+      }
+      const timestamp = new Date().toISOString();
+      const record = {
+        id: createFormId(),
+        document: result.document,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      setWorkspace((current) => ({
+        ...current,
+        activeFormId: record.id,
+        forms: [record, ...current.forms],
+      }));
+      setValue(defaultFormValue(result.document));
+      setSurface('editor');
+      showNotice(`已导入“${result.document.metadata.title}”。`);
+    } catch {
+      showNotice('导入失败：请选择有效的 JSON 文件。', 'error');
+    }
   };
 
   const handleAction = (actionId: string) => {
-    setNotice(actionId === 'submit' ? '申请已提交，正在等待审批。' : '草稿已保存。');
-    window.setTimeout(() => setNotice(''), 2400);
+    showNotice(actionId === 'submit' ? '申请已提交，正在等待审批。' : '草稿已保存。');
   };
 
   return (
@@ -124,9 +196,26 @@ function App() {
             <span>
               <strong>{document.metadata.title}</strong>
               <small>
-                <span className={`playground-status ${compilation.ok ? 'is-ready' : 'is-error'}`}>
-                  <ProductIcon name={compilation.ok ? 'check' : 'close'} size={11} />
-                  {compilation.ok ? '本地已保存' : `${compilation.diagnostics.length} 个问题`}
+                <span
+                  className={`playground-status is-${storageState}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <ProductIcon
+                    name={
+                      storageState === 'saving'
+                        ? 'clock'
+                        : storageState === 'saved'
+                          ? 'check'
+                          : 'close'
+                    }
+                    size={11}
+                  />
+                  {storageState === 'saving'
+                    ? '正在保存'
+                    : storageState === 'saved'
+                      ? '已保存到本地'
+                      : '保存失败'}
                 </span>
                 <i aria-hidden="true">·</i>
                 FORM
@@ -157,14 +246,26 @@ function App() {
               <span>导出</span>
             </button>
             <button
-              aria-label={saved ? '表单已保存' : '保存表单'}
+              aria-label={storageState === 'error' ? '重试保存表单' : '保存表单'}
+              aria-keyshortcuts="Control+S Meta+S"
               type="button"
-              className="playground-primary btn"
+              className={`playground-primary btn is-${storageState}`}
               data-variant="primary"
               onClick={save}
             >
-              <ProductIcon name={saved ? 'check' : 'save'} size={15} />
-              <span>{saved ? '已保存' : '保存表单'}</span>
+              <ProductIcon
+                name={
+                  storageState === 'saving' ? 'clock' : storageState === 'saved' ? 'check' : 'save'
+                }
+                size={15}
+              />
+              <span>
+                {storageState === 'saving'
+                  ? '保存中'
+                  : storageState === 'saved'
+                    ? '已保存'
+                    : '重试保存'}
+              </span>
             </button>
           </div>
         </header>
@@ -176,6 +277,7 @@ function App() {
           storageAvailable={storageAvailable}
           onOpen={openForm}
           onCreate={createForm}
+          onImport={importJson}
         />
       ) : (
         <main className="playground-editor">
@@ -192,8 +294,12 @@ function App() {
       )}
 
       {notice && (
-        <div className="playground-toast" role="status" aria-live="polite">
-          {notice}
+        <div
+          className={`playground-toast is-${notice.tone}`}
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+        >
+          {notice.message}
         </div>
       )}
     </div>

@@ -2,10 +2,12 @@ import {
   type ComponentType,
   type FormEvent,
   type InputHTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -361,15 +363,28 @@ function NodeView(props: NodeViewProps): ReactNode {
               <button
                 type="button"
                 role="tab"
+                id={`${prefix}-${node.id}-tab-${tab.id}`}
                 aria-selected={tab.id === active}
+                aria-controls={`${prefix}-${node.id}-panel`}
+                tabIndex={tab.id === active ? 0 : -1}
                 key={tab.id}
+                onKeyDown={(event) => handleLayoutTabKey(event, tabs, tab.id, setActiveLayoutChild)}
                 onClick={() => setActiveLayoutChild(tab.id)}
               >
                 {tab.label ?? tab.id}
               </button>
             ))}
           </div>
-          {active && <NodeView {...props} nodeId={active} suppressHeading />}
+          {active && (
+            <div
+              className="a3s-form-tabpanel"
+              id={`${prefix}-${node.id}-panel`}
+              role="tabpanel"
+              aria-labelledby={`${prefix}-${node.id}-tab-${active}`}
+            >
+              <NodeView {...props} nodeId={active} suppressHeading />
+            </div>
+          )}
         </section>
       );
     }
@@ -552,67 +567,177 @@ function NodeView(props: NodeViewProps): ReactNode {
   );
 }
 
+function handleLayoutTabKey(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  tabs: readonly { id: string }[],
+  currentId: string,
+  onChange: (id: string) => void,
+) {
+  const current = tabs.findIndex((tab) => tab.id === currentId);
+  if (current < 0) return;
+  let nextIndex: number | undefined;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = tabs.length - 1;
+  if (event.key === 'ArrowRight') nextIndex = (current + 1) % tabs.length;
+  if (event.key === 'ArrowLeft') nextIndex = (current - 1 + tabs.length) % tabs.length;
+  if (nextIndex === undefined) return;
+  event.preventDefault();
+  onChange(tabs[nextIndex].id);
+  const buttons =
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+  buttons?.[nextIndex]?.focus();
+}
+
 export function FormRenderer(props: FormRendererProps) {
   const generatedId = useId().replaceAll(':', '');
+  const prefix = `a3sf-${generatedId}`;
+  const formRef = useRef<HTMLFormElement>(null);
+  const actionController = useRef<AbortController | null>(null);
   const [submittedErrors, setSubmittedErrors] = useState<FieldError[]>([]);
+  const [pendingAction, setPendingAction] = useState<string>();
+  const [actionError, setActionError] = useState('');
   const errors = props.errors ?? submittedErrors;
   const errorMap = useMemo(() => {
     const map = new Map<string, FieldError[]>();
     for (const error of errors) map.set(error.path, [...(map.get(error.path) ?? []), error]);
     return map;
   }, [errors]);
-  const invoke = async (actionId: string) => {
-    const nextErrors = validateFormValue(props.plan, props.value);
-    setSubmittedErrors(nextErrors);
-    if (nextErrors.length > 0) return;
-    if (props.onAction) await props.onAction(actionId, props.value);
-    else {
-      const definition = props.plan.actions.find((item) => item.id === actionId);
-      if (definition && props.hostAdapter?.invokeAction) {
-        await props.hostAdapter.invokeAction(
-          { definition, value: props.value, plan: props.plan },
-          new AbortController().signal,
-        );
-      }
+  const defaultAction =
+    props.plan.actions.find((item) => item.tone === 'primary') ?? props.plan.actions[0];
+
+  useEffect(() => () => actionController.current?.abort(), []);
+
+  const focusError = (path: string) => {
+    const node = Object.values(props.plan.nodeById).find((item) => item.valuePath === path);
+    if (!node) return;
+    const control = window.document.getElementById(`${prefix}-${node.id}`);
+    control?.focus();
+    control?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const changeValue = (next: JsonObject) => {
+    props.onChange(next);
+    if (props.errors === undefined && submittedErrors.length > 0) {
+      setSubmittedErrors(validateFormValue(props.plan, next));
     }
   };
+
+  const invoke = async (actionId: string, requiresValidation: boolean) => {
+    if (pendingAction) return;
+    setActionError('');
+    if (requiresValidation) {
+      const nextErrors = validateFormValue(props.plan, props.value);
+      setSubmittedErrors(nextErrors);
+      if (nextErrors.length > 0) {
+        window.requestAnimationFrame(() => focusError(nextErrors[0].path));
+        return;
+      }
+    }
+    const definition = props.plan.actions.find((item) => item.id === actionId);
+    if (!definition) return;
+    setPendingAction(actionId);
+    const controller = new AbortController();
+    actionController.current = controller;
+    try {
+      if (props.onAction) await props.onAction(actionId, props.value);
+      else if (props.hostAdapter?.invokeAction) {
+        await props.hostAdapter.invokeAction(
+          { definition, value: props.value, plan: props.plan },
+          controller.signal,
+        );
+      }
+    } catch {
+      if (!controller.signal.aborted) setActionError('操作没有完成，请检查网络或宿主状态后重试。');
+    } finally {
+      if (!controller.signal.aborted) setPendingAction(undefined);
+      if (actionController.current === controller) actionController.current = null;
+    }
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const action =
-      props.plan.actions.find((item) => item.tone === 'primary') ?? props.plan.actions[0];
-    if (action) void invoke(action.id);
+    if (defaultAction) {
+      void invoke(
+        defaultAction.id,
+        defaultAction.tone === 'primary' || defaultAction.tone === undefined,
+      );
+    }
   };
+
   return (
     <form
+      ref={formRef}
       className={`a3s-form-renderer ${props.className ?? ''}`}
       onSubmit={submit}
       noValidate
+      aria-busy={Boolean(pendingAction)}
       lang={props.locale ?? props.plan.metadata.locale ?? 'zh-CN'}
     >
       <NodeView
         {...props}
+        onChange={changeValue}
         nodeId={props.plan.root}
         errorMap={errorMap}
-        prefix={`a3sf-${generatedId}`}
+        prefix={prefix}
       />
+      {errors.length > 0 && (
+        <section className="a3s-form-error-summary" role="alert" aria-label="表单校验结果">
+          <strong>请检查 {errors.length} 项内容</strong>
+          <ul>
+            {errors.map((error) => {
+              const node = Object.values(props.plan.nodeById).find(
+                (item) => item.valuePath === error.path,
+              );
+              return (
+                <li key={`${error.path}-${error.code}-${error.message}`}>
+                  {node ? (
+                    <button type="button" onClick={() => focusError(error.path)}>
+                      {node.label ?? node.id}：{error.message}
+                    </button>
+                  ) : (
+                    error.message
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+      {actionError && (
+        <div className="a3s-form-action-error" role="alert">
+          {actionError}
+        </div>
+      )}
       {props.plan.actions.length > 0 && (
         <footer className="a3s-form-actions">
-          {props.plan.actions.map((action) => (
-            <button
-              key={action.id}
-              type={action.tone === 'primary' ? 'submit' : 'button'}
-              className={`btn ${action.tone === 'primary' ? 'a3s-form-primary' : 'a3s-form-secondary'}`}
-              data-variant={action.tone === 'primary' ? 'primary' : 'secondary'}
-              onClick={(event) => {
-                if (action.tone === 'primary') event.preventDefault();
-                void invoke(action.id);
-              }}
-              disabled={props.readOnly}
-            >
-              {action.label}
-            </button>
-          ))}
+          {props.plan.actions.map((action) => {
+            const primary =
+              action.tone === 'primary' ||
+              (action.tone === undefined && action.id === defaultAction?.id);
+            const danger = action.tone === 'danger';
+            const variant = danger ? 'destructive' : primary ? 'primary' : 'secondary';
+            return (
+              <button
+                key={action.id}
+                type={primary ? 'submit' : 'button'}
+                className={`btn ${danger ? 'a3s-form-danger' : primary ? 'a3s-form-primary' : 'a3s-form-secondary'}`}
+                data-variant={variant}
+                onClick={(event) => {
+                  if (primary) event.preventDefault();
+                  void invoke(action.id, primary);
+                }}
+                disabled={Boolean(props.readOnly || pendingAction)}
+              >
+                {pendingAction === action.id ? '处理中…' : action.label}
+              </button>
+            );
+          })}
         </footer>
+      )}
+      {pendingAction && (
+        <span className="a3s-form-action-progress" role="status" aria-live="polite">
+          正在处理表单操作。
+        </span>
       )}
     </form>
   );

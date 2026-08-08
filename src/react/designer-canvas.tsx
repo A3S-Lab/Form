@@ -1,5 +1,6 @@
 import { type CSSProperties, type DragEvent, type ReactNode, useState } from 'react';
 import type { FormDocument, UiNode } from '../core';
+import { DesignerIcon } from './designer-icons';
 import type { FormNodeDefinition, FormNodeRegistry } from './node-registry';
 import { SelectControl } from './select-control';
 
@@ -140,7 +141,7 @@ function CustomCanvasNode(
         onClick={() => props.onSelect(props.node.id)}
       />
       <span className="a3s-form-node-handle" aria-hidden="true">
-        ⋮⋮
+        <DesignerIcon name="grip" size={15} />
       </span>
       <div className="a3s-form-design-custom-body">
         {Design ? (
@@ -232,7 +233,7 @@ function CanvasNode(
         onClick={() => props.onSelect(node.id)}
       />
       <span className="a3s-form-node-handle" aria-hidden="true">
-        ⠿
+        <DesignerIcon name="grip" size={15} />
       </span>
       {node.kind === 'repeater' ? (
         <FieldShell node={node} required={required}>
@@ -282,9 +283,22 @@ function TabbedContainer(
           <button
             type="button"
             role="tab"
+            id={`a3s-form-design-tab-${tab.id}`}
             aria-selected={tab.id === activeId}
+            aria-controls={`a3s-form-design-panel-${props.node.id}`}
+            tabIndex={tab.id === activeId ? 0 : -1}
             className={tab.id === activeId ? 'is-active' : ''}
             key={tab.id}
+            onKeyDown={(event) => {
+              const next = adjacentTab(tabs, tab.id, event.key);
+              if (!next) return;
+              event.preventDefault();
+              props.onActivateTab(props.node.id, next.id);
+              props.onSelect(next.id);
+              window.requestAnimationFrame(() =>
+                window.document.getElementById(`a3s-form-design-tab-${next.id}`)?.focus(),
+              );
+            }}
             onClick={() => {
               props.onActivateTab(props.node.id, tab.id);
               props.onSelect(tab.id);
@@ -295,7 +309,14 @@ function TabbedContainer(
         ))}
       </div>
       {active ? (
-        <CanvasPanel {...props} node={active} ancestry={props.ancestry} label="标签页内容" />
+        <CanvasPanel
+          {...props}
+          node={active}
+          ancestry={props.ancestry}
+          label="标签页内容"
+          panelId={`a3s-form-design-panel-${props.node.id}`}
+          labelledBy={`a3s-form-design-tab-${active.id}`}
+        />
       ) : (
         <CanvasDropSlot {...props} containerId={props.node.id} index={0} placement="empty" />
       )}
@@ -344,11 +365,22 @@ function CollapseContainer(
 }
 
 function CanvasPanel(
-  props: CanvasTreeProps & { node: UiNode; ancestry: Set<string>; label: string },
+  props: CanvasTreeProps & {
+    node: UiNode;
+    ancestry: Set<string>;
+    label: string;
+    panelId: string;
+    labelledBy: string;
+  },
 ) {
   const selected = props.selectedId === props.node.id;
   return (
-    <div className={`a3s-form-design-panel${selected ? ' is-selected' : ''}`}>
+    <div
+      className={`a3s-form-design-panel${selected ? ' is-selected' : ''}`}
+      id={props.panelId}
+      role="tabpanel"
+      aria-labelledby={props.labelledBy}
+    >
       <div className="a3s-form-design-panel-heading">
         <button type="button" onClick={() => props.onSelect(props.node.id)}>
           {props.label}
@@ -366,7 +398,7 @@ function ContainerHeading(props: CanvasTreeProps & { node: UiNode; selected: boo
     <header className="a3s-form-design-container-heading">
       <button type="button" onClick={() => props.onSelect(props.node.id)}>
         <span className="a3s-form-node-handle" aria-hidden="true">
-          ⠿
+          <DesignerIcon name="grip" size={15} />
         </span>
         <span>{props.node.label ?? fallback}</span>
       </button>
@@ -408,7 +440,7 @@ function ContentNode(
       ) : (
         <>
           <span className="a3s-form-content-icon" aria-hidden="true">
-            i
+            <DesignerIcon name="info" size={15} />
           </span>
           <p>{props.node.content ?? '在属性面板中编辑说明文字。'}</p>
         </>
@@ -498,7 +530,7 @@ function NodeActions(props: CanvasTreeProps & { actionNode: UiNode }) {
           props.onMove(-1);
         }}
       >
-        ↑
+        <DesignerIcon name="arrow-up" size={14} />
       </button>
       <button
         type="button"
@@ -512,7 +544,7 @@ function NodeActions(props: CanvasTreeProps & { actionNode: UiNode }) {
           props.onMove(1);
         }}
       >
-        ↓
+        <DesignerIcon name="arrow-down" size={14} />
       </button>
       <button
         type="button"
@@ -526,7 +558,7 @@ function NodeActions(props: CanvasTreeProps & { actionNode: UiNode }) {
           props.onDuplicate();
         }}
       >
-        ⧉
+        <DesignerIcon name="copy" size={14} />
       </button>
       <button
         type="button"
@@ -540,7 +572,7 @@ function NodeActions(props: CanvasTreeProps & { actionNode: UiNode }) {
           props.onRemove();
         }}
       >
-        ×
+        <DesignerIcon name="trash" size={14} />
       </button>
     </div>
   );
@@ -573,7 +605,9 @@ function CanvasDropSlot(
     >
       {props.placement === 'empty' ? (
         <span>
-          <i aria-hidden="true">＋</i>
+          <i aria-hidden="true">
+            <DesignerIcon name="components" size={18} />
+          </i>
           <strong>添加第一个组件</strong>
           <small>从左侧添加字段和布局组件。</small>
           <em>拖拽组件到这里，或从左侧点击添加</em>
@@ -601,4 +635,14 @@ function handleDrop(event: DragEvent, target: CanvasDropTarget, props: DesignerC
   }
   const nodeId = event.dataTransfer.getData(nodeDragType);
   if (nodeId) props.onNodeDrop(nodeId, target);
+}
+
+function adjacentTab(tabs: readonly UiNode[], currentId: string, key: string): UiNode | undefined {
+  const current = tabs.findIndex((tab) => tab.id === currentId);
+  if (current < 0) return undefined;
+  if (key === 'Home') return tabs[0];
+  if (key === 'End') return tabs.at(-1);
+  if (key !== 'ArrowLeft' && key !== 'ArrowRight') return undefined;
+  const offset = key === 'ArrowRight' ? 1 : -1;
+  return tabs[(current + offset + tabs.length) % tabs.length];
 }

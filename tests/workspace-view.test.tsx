@@ -12,12 +12,16 @@ describe('Playground WorkspaceView', () => {
       new Date('2026-08-07T00:00:00.000Z'),
       sampleForm,
     );
+    let importedFile = '';
     render(
       <WorkspaceView
         forms={[record]}
         storageAvailable
         onOpen={() => undefined}
         onCreate={() => undefined}
+        onImport={(file) => {
+          importedFile = file.name;
+        }}
       />,
     );
 
@@ -40,5 +44,49 @@ describe('Playground WorkspaceView', () => {
     const dialog = screen.getByRole('dialog', { name: '创建表单' });
     expect(dialog.classList.contains('card')).toBe(true);
     expect(screen.getByLabelText('新表单名称').closest('.field')).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: '创建表单' })).toBeNull();
+
+    const importCard = screen.getByRole('button', { name: /导入表单 JSON/ });
+    fireEvent.click(importCard);
+    const fileInput = screen.getByLabelText('导入表单 JSON');
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['{}'], 'imported-form.json', { type: 'application/json' })] },
+    });
+    expect(importedFile).toBe('imported-form.json');
+  });
+
+  it('closes the workspace navigation when the viewport becomes compact', () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+
+    const record = createFormRecord(
+      'employee-onboarding',
+      sampleForm.metadata.title,
+      sampleForm.metadata.description ?? '',
+      new Date('2026-08-07T00:00:00.000Z'),
+      sampleForm,
+    );
+    render(
+      <WorkspaceView
+        forms={[record]}
+        storageAvailable
+        onOpen={() => undefined}
+        onCreate={() => undefined}
+        onImport={() => undefined}
+      />,
+    );
+
+    const workspace = screen.getByRole('main');
+    expect(workspace.getAttribute('data-mobile-navigation')).toBe('open');
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    fireEvent(window, new Event('resize'));
+
+    expect(workspace.getAttribute('data-mobile-navigation')).toBe('closed');
+    expect(screen.queryByRole('complementary', { name: 'A3S Form 导航' })).toBeNull();
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
   });
 });

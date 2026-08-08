@@ -38,6 +38,39 @@ function dragTransfer(): DataTransfer {
 }
 
 describe('React FormDesigner', () => {
+  it('uses focused preview and restores the authoring panels', () => {
+    render(<DesignerHarness />);
+    const designer = screen.getByTestId('form-designer');
+    expect(screen.getByRole('complementary', { name: '组件与表单结构' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: '属性面板' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '预览' }));
+    expect(designer.getAttribute('data-mode')).toBe('preview');
+    expect(screen.queryByRole('complementary', { name: '组件与表单结构' })).toBeNull();
+    expect(screen.queryByRole('complementary', { name: '属性面板' })).toBeNull();
+    expect(screen.getByLabelText('姓名')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '设计' }));
+    expect(designer.getAttribute('data-mode')).toBe('design');
+    expect(screen.getByRole('complementary', { name: '组件与表单结构' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: '属性面板' })).toBeTruthy();
+  });
+
+  it('supports canvas undo and redo shortcuts without hijacking text inputs', () => {
+    render(<DesignerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '添加单行文本字段' }));
+    expect(screen.getByTestId('designer-document').textContent).toContain('field-1');
+
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(screen.getByTestId('designer-document').textContent).not.toContain('field-1');
+    fireEvent.keyDown(window, { key: 'z', metaKey: true, shiftKey: true });
+    expect(screen.getByTestId('designer-document').textContent).toContain('field-1');
+
+    const title = screen.getByLabelText('字段标题');
+    fireEvent.keyDown(title, { key: 'z', metaKey: true });
+    expect(screen.getByTestId('designer-document').textContent).toContain('field-1');
+  });
+
   it('filters the component catalog and recovers from an empty search', () => {
     render(<DesignerHarness />);
     const search = screen.getByLabelText('搜索组件');
@@ -50,6 +83,77 @@ describe('React FormDesigner', () => {
     expect(screen.getByText('没有匹配的组件')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '清空组件搜索' }));
     expect(screen.getByRole('button', { name: '添加邮箱字段' })).toBeTruthy();
+  });
+
+  it('supports complete keyboard navigation across editor and canvas tabs', () => {
+    const document = createDocument();
+    document.ui.nodes.push(
+      {
+        id: 'profile-tabs',
+        kind: 'group',
+        label: '资料标签',
+        layout: 'tabs',
+        children: ['profile-basic', 'profile-extra', 'profile-review'],
+      },
+      {
+        id: 'profile-basic',
+        kind: 'group',
+        label: '基本资料',
+        layout: 'tab',
+        children: [],
+      },
+      {
+        id: 'profile-extra',
+        kind: 'group',
+        label: '补充资料',
+        layout: 'tab',
+        children: [],
+      },
+      {
+        id: 'profile-review',
+        kind: 'group',
+        label: '确认资料',
+        layout: 'tab',
+        children: [],
+      },
+    );
+    document.ui.nodes[0].children?.push('profile-tabs');
+    render(<DesignerHarness initial={document} />);
+
+    const components = screen.getByRole('tab', { name: '组件' });
+    fireEvent.keyDown(components, { key: 'End' });
+    expect(screen.getByRole('tab', { name: '结构' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(screen.getByRole('tab', { name: '结构' }), { key: 'Home' });
+    expect(components.getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(components, { key: 'ArrowLeft' });
+    fireEvent.keyDown(screen.getByRole('tab', { name: '结构' }), { key: 'ArrowRight' });
+    fireEvent.keyDown(components, { key: 'PageDown' });
+    expect(components.getAttribute('aria-selected')).toBe('true');
+
+    const properties = screen.getByRole('tab', { name: '属性' });
+    fireEvent.keyDown(properties, { key: 'End' });
+    expect(screen.getByRole('tab', { name: 'Agent' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Agent' }), { key: 'Home' });
+    fireEvent.keyDown(properties, { key: 'ArrowLeft' });
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Agent' }), { key: 'ArrowRight' });
+    fireEvent.keyDown(properties, { key: 'PageDown' });
+    expect(properties.getAttribute('aria-selected')).toBe('true');
+
+    const basic = screen.getByRole('tab', { name: '基本资料' });
+    fireEvent.keyDown(basic, { key: 'End' });
+    expect(screen.getByRole('tab', { name: '确认资料' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    fireEvent.keyDown(screen.getByRole('tab', { name: '确认资料' }), { key: 'Home' });
+    fireEvent.keyDown(basic, { key: 'ArrowLeft' });
+    fireEvent.keyDown(screen.getByRole('tab', { name: '确认资料' }), { key: 'ArrowRight' });
+    fireEvent.keyDown(basic, { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: '补充资料' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    fireEvent.keyDown(screen.getByRole('tab', { name: '补充资料' }), { key: 'ArrowLeft' });
+    fireEvent.keyDown(basic, { key: 'PageDown' });
+    expect(basic.getAttribute('aria-selected')).toBe('true');
   });
 
   it('adds, configures, previews, deletes and restores fields in Chinese', () => {
@@ -73,7 +177,7 @@ describe('React FormDesigner', () => {
     fireEvent.change(screen.getByLabelText('字段说明'), { target: { value: '请留下联系方式' } });
     fireEvent.change(screen.getByLabelText('占位提示'), { target: { value: '手机或座机' } });
     fireEvent.change(screen.getByLabelText('栅格宽度'), { target: { value: '6' } });
-    fireEvent.click(screen.getByRole('button', { name: '校验' }));
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
     fireEvent.click(screen.getByRole('switch', { name: '必填字段' }));
     expect(screen.getByRole('button', { name: /联系电话/ })).toBeTruthy();
     expect(screen.getByTestId('designer-document').textContent).toContain('请留下联系方式');
@@ -82,22 +186,42 @@ describe('React FormDesigner', () => {
     fireEvent.change(screen.getByLabelText('联系电话'), { target: { value: '010-12345678' } });
     expect((screen.getByLabelText('联系电话') as HTMLTextAreaElement).value).toBe('010-12345678');
     fireEvent.click(screen.getByRole('button', { name: '设计' }));
-    fireEvent.click(screen.getByRole('button', { name: '属性' }));
+    fireEvent.click(screen.getByRole('tab', { name: '属性' }));
     fireEvent.click(screen.getByRole('button', { name: '删除字段' }));
     expect(screen.queryByRole('button', { name: /联系电话/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /撤销/ }));
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     expect(screen.getByRole('button', { name: /联系电话/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /重做/ }));
+    fireEvent.click(screen.getByRole('button', { name: '重做' }));
     expect(screen.queryByRole('button', { name: /联系电话/ })).toBeNull();
   });
 
   it('reviews revision-bound structured patches and rejects malformed input', () => {
     const document = compileForm(createDocument()).document as FormDocument;
     render(<DesignerHarness initial={document} />);
-    fireEvent.click(screen.getByRole('button', { name: '高级' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Agent' }));
+    expect(screen.getByText('Agent 补丁')).toBeTruthy();
+    expect(screen.getByText('载入模板或粘贴 Agent 生成的补丁。')).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: '校验并应用补丁' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      within(screen.getByLabelText('FormPatch 当前状态')).getByText(String(document.revision)),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '载入空补丁' }));
+    expect((screen.getByLabelText('FormPatch JSON') as HTMLTextAreaElement).value).toContain(
+      `"baseRevision": ${document.revision}`,
+    );
     const editor = screen.getByLabelText('FormPatch JSON');
+    fireEvent.change(editor, {
+      target: { value: JSON.stringify({ baseRevision: document.revision }) },
+    });
+    expect(screen.getByText('operations 必须是数组。')).toBeTruthy();
+    fireEvent.change(editor, {
+      target: { value: JSON.stringify({ baseRevision: 'current', operations: [] }) },
+    });
+    expect(screen.getByText('baseRevision 必须是数字。')).toBeTruthy();
     fireEvent.change(editor, { target: { value: '{invalid' } });
-    fireEvent.click(screen.getByRole('button', { name: '校验并应用' }));
+    fireEvent.click(screen.getByRole('button', { name: '校验并应用补丁' }));
     expect(screen.getByText('补丁不是有效 JSON，请检查后重试。')).toBeTruthy();
 
     fireEvent.change(editor, {
@@ -109,7 +233,7 @@ describe('React FormDesigner', () => {
         }),
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: '校验并应用' }));
+    fireEvent.click(screen.getByRole('button', { name: '校验并应用补丁' }));
     expect(screen.getByText(/已应用 1 项受控变更/)).toBeTruthy();
     expect(screen.getByTestId('designer-document').textContent).toContain('AI 审阅后的表单');
   });
@@ -303,7 +427,7 @@ describe('React FormDesigner', () => {
     fireEvent.change(screen.getByLabelText('字段选项'), {
       target: { value: '研发部\n产品部\n运营部' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '校验' }));
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
     fireEvent.click(screen.getByRole('switch', { name: '必填字段' }));
     fireEvent.click(screen.getByRole('switch', { name: '只读字段' }));
     fireEvent.click(screen.getByRole('switch', { name: '默认隐藏' }));
@@ -323,10 +447,10 @@ describe('React FormDesigner', () => {
     expect(selectNode?.hidden).toBe(true);
     expect(document.schema.properties?.[selectProperty]?.minLength).toBe(2);
 
-    fireEvent.click(screen.getByRole('button', { name: '属性' }));
+    fireEvent.click(screen.getByRole('tab', { name: '属性' }));
     fireEvent.click(screen.getByRole('button', { name: '选择基础信息' }));
     fireEvent.click(screen.getByRole('button', { name: '添加数字字段' }));
-    fireEvent.click(screen.getByRole('button', { name: '校验' }));
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
     fireEvent.change(screen.getByLabelText('最小值'), { target: { value: '1' } });
     fireEvent.change(screen.getByLabelText('最大值'), { target: { value: '99' } });
     document = currentDocument();
@@ -498,10 +622,10 @@ describe('React FormDesigner', () => {
     expect((screen.getByLabelText('内部间距') as HTMLSelectElement).value).toBe('16');
 
     fireEvent.click(screen.getByRole('button', { name: '选择root' }));
-    fireEvent.click(screen.getByRole('button', { name: '校验' }));
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
     expect(screen.getByText('当前节点没有字段校验设置。')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '选择amount' }));
-    fireEvent.click(screen.getByRole('button', { name: '校验' }));
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
     fireEvent.change(screen.getByLabelText('最小值'), { target: { value: '' } });
   });
 
@@ -525,9 +649,9 @@ describe('React FormDesigner', () => {
         name: '复制节点',
       }),
     );
-    fireEvent.click(screen.getByRole('button', { name: '校验' }));
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
     fireEvent.click(screen.getByRole('switch', { name: '必填字段' }));
-    fireEvent.click(screen.getByRole('button', { name: '属性' }));
+    fireEvent.click(screen.getByRole('tab', { name: '属性' }));
     fireEvent.click(screen.getByRole('button', { name: '删除字段' }));
     expect(currentDocument().ui.nodes.map((node) => node.id)).toEqual(['root']);
   });
@@ -564,10 +688,10 @@ describe('React FormDesigner', () => {
     expect(screen.getByText('在属性面板中编辑说明文字。')).toBeTruthy();
     expect(screen.getByText('间距 24px')).toBeTruthy();
     expect(screen.getAllByText('拖拽组件到这里，或从左侧点击添加').length).toBeGreaterThan(2);
-    fireEvent.click(screen.getByRole('button', { name: '结构' }));
+    fireEvent.click(screen.getByRole('tab', { name: '结构' }));
     expect(screen.getByRole('treeitem', { name: '选择loop' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '组件' }));
+    fireEvent.click(screen.getByRole('tab', { name: '组件' }));
     const unknownTransfer = dragTransfer();
     unknownTransfer.setData('application/x-a3s-form-catalog', 'unknown-component');
     const rootDrop = screen.getByRole('button', { name: '插入到root第1位' });
@@ -579,15 +703,15 @@ describe('React FormDesigner', () => {
 
   it('adds fields to selected containers, allocates unique ids and reports patch conflicts', () => {
     render(<DesignerHarness />);
-    fireEvent.click(screen.getByRole('button', { name: '结构' }));
+    fireEvent.click(screen.getByRole('tab', { name: '结构' }));
     fireEvent.click(screen.getByRole('treeitem', { name: '选择基础信息' }));
-    fireEvent.click(screen.getByRole('button', { name: '组件' }));
+    fireEvent.click(screen.getByRole('tab', { name: '组件' }));
     fireEvent.click(screen.getByRole('button', { name: '添加单行文本字段' }));
     fireEvent.click(screen.getByRole('button', { name: '添加单行文本字段' }));
     expect(screen.getByTestId('designer-document').textContent).toContain('field-1');
     expect(screen.getByTestId('designer-document').textContent).toContain('field-2');
 
-    fireEvent.click(screen.getByRole('button', { name: '高级' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Agent' }));
     fireEvent.change(screen.getByLabelText('FormPatch JSON'), {
       target: {
         value: JSON.stringify({
@@ -597,7 +721,7 @@ describe('React FormDesigner', () => {
         }),
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: '校验并应用' }));
+    fireEvent.click(screen.getByRole('button', { name: '校验并应用补丁' }));
     expect(screen.getByText(/补丁基于 revision 0/)).toBeTruthy();
     expect(screen.getByTestId('designer-document').textContent).not.toContain('过期补丁');
   });
@@ -625,15 +749,15 @@ describe('React FormDesigner', () => {
     ];
 
     render(<DesignerHarness initial={sparse} />);
-    fireEvent.click(screen.getByRole('button', { name: '结构' }));
+    fireEvent.click(screen.getByRole('tab', { name: '结构' }));
     expect(screen.getByRole('treeitem', { name: '选择root' })).toBeTruthy();
     expect(screen.getByRole('treeitem', { name: '选择name' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '属性' }));
+    fireEvent.click(screen.getByRole('tab', { name: '属性' }));
     expect((screen.getByLabelText('字段标题') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('字段组件') as HTMLSelectElement).value).toBe('text');
     expect((screen.getByLabelText('栅格宽度') as HTMLSelectElement).value).toBe('12');
 
-    fireEvent.click(screen.getByRole('button', { name: '校验' }));
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
     const required = screen.getByRole('switch', { name: '必填字段' });
     fireEvent.click(required);
     expect(screen.getByTestId('designer-document').textContent).toContain('"required":["name"]');

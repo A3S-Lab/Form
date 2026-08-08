@@ -193,8 +193,18 @@ a {
   gap: 4px;
 }
 
-.playground-status.is-ready {
+.playground-status.is-ready,
+.playground-status.is-saved {
   color: var(--a3s-green);
+}
+
+.playground-status.is-saving {
+  color: var(--a3s-muted);
+}
+
+.playground-status.is-saving svg,
+.playground-header-actions button.is-saving svg {
+  animation: playground-saving 1.1s linear infinite;
 }
 
 .playground-status.is-error {
@@ -263,7 +273,7 @@ a {
 }
 
 .playground-shell > main > .a3s-form-designer {
-  min-width: 940px;
+  min-width: 0;
   flex: 1;
   border: 0;
 }
@@ -296,15 +306,48 @@ a {
   place-items: center;
   border-radius: 50%;
   background: color-mix(in srgb, var(--a3s-green) 10%, var(--a3s-panel));
-  color: var(--a3s-green);
-  content: "✓";
-  font-size: 12px;
+  content: "";
+}
+
+.playground-toast::after {
+  position: absolute;
+  left: 20px;
+  width: 7px;
+  height: 4px;
+  border-bottom: 1.7px solid var(--a3s-green);
+  border-left: 1.7px solid var(--a3s-green);
+  content: "";
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.playground-toast.is-error {
+  border-color: color-mix(in srgb, var(--a3s-red) 28%, var(--a3s-line));
+}
+
+.playground-toast.is-error::before {
+  background: color-mix(in srgb, var(--a3s-red) 10%, var(--a3s-panel));
+}
+
+.playground-toast.is-error::after {
+  width: 8px;
+  height: 8px;
+  border: 0;
+  background:
+    linear-gradient(45deg, transparent 43%, var(--a3s-red) 43% 57%, transparent 57%),
+    linear-gradient(-45deg, transparent 43%, var(--a3s-red) 43% 57%, transparent 57%);
+  transform: none;
 }
 
 @keyframes playground-toast-in {
   from {
     transform: translateY(6px);
     opacity: 0;
+  }
+}
+
+@keyframes playground-saving {
+  to {
+    transform: rotate(1turn);
   }
 }
 
@@ -565,7 +608,9 @@ a {
   .playground-toast,
   .playground-primary,
   .playground-secondary,
-  .playground-back {
+  .playground-back,
+  .playground-status.is-saving svg,
+  .playground-header-actions button.is-saving svg {
     animation: none;
     transition: none;
   }

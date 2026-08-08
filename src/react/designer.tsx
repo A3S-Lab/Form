@@ -1,4 +1,11 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   applyFormPatch,
   type CompileOptions,
@@ -18,6 +25,7 @@ import {
   fieldWidgets,
   findCatalogItem,
 } from './designer-catalog';
+import { CatalogIcon, DesignerIcon } from './designer-icons';
 import type { FormNodeRegistry } from './node-registry';
 import { FormRenderer, type FormRendererProps, type FormWidgetRegistry } from './renderer';
 import { SelectControl } from './select-control';
@@ -39,7 +47,19 @@ export interface FormDesignerProps {
 }
 
 type LeftPanel = 'components' | 'outline';
-type InspectorPanel = 'properties' | 'validation' | 'advanced';
+type InspectorPanel = 'properties' | 'validation' | 'agent';
+type MobilePanel = 'components' | 'canvas' | 'settings';
+
+interface PatchFeedback {
+  tone: 'success' | 'error';
+  message: string;
+}
+
+interface DesignerNotice {
+  tone: 'info' | 'error';
+  message: string;
+  undoable?: boolean;
+}
 
 function allocateId(existing: Set<string>, prefix: string): string {
   let index = 1;
@@ -76,12 +96,16 @@ function compileMutation(
   document: FormDocument,
   mutate: (draft: FormDocument) => void,
   options?: CompileOptions,
+  onInvalid?: (message: string) => void,
 ): FormDocument | undefined {
   const draft = structuredClone(document);
   mutate(draft);
   draft.revision += 1;
   delete draft.digest;
   const result = compileForm(draft, options);
+  if (!result.ok) {
+    onInvalid?.(result.diagnostics[0]?.message ?? '这项修改未通过表单编译校验。');
+  }
   return result.ok ? result.document : undefined;
 }
 
@@ -134,11 +158,13 @@ export function FormDesigner(props: FormDesignerProps) {
   const [viewport, setViewport] = useState<'desktop' | 'mobile'>('desktop');
   const [leftPanel, setLeftPanel] = useState<LeftPanel>('components');
   const [inspectorPanel, setInspectorPanel] = useState<InspectorPanel>('properties');
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('canvas');
   const [value, setValue] = useState<JsonObject>({});
   const [undoStack, setUndoStack] = useState<FormDocument[]>([]);
   const [redoStack, setRedoStack] = useState<FormDocument[]>([]);
   const [patchText, setPatchText] = useState('');
-  const [patchMessage, setPatchMessage] = useState('');
+  const [patchFeedback, setPatchFeedback] = useState<PatchFeedback>();
+  const [notice, setNotice] = useState<DesignerNotice>();
   const activeValue = props.value ?? value;
   const selected = document.ui.nodes.find((node) => node.id === selectedId);
   const selectedProperty = propertyFromNode(selected);
@@ -146,7 +172,15 @@ export function FormDesigner(props: FormDesignerProps) {
     ? document.schema.properties?.[selectedProperty]
     : undefined;
   const mutateDocument = (mutate: (draft: FormDocument) => void) =>
-    compileMutation(document, mutate, compileOptions);
+    compileMutation(document, mutate, compileOptions, (message) =>
+      compiled.ok ? setNotice({ tone: 'error', message }) : undefined,
+    );
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(undefined), notice.undoable ? 5200 : 3600);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const commit = (next: FormDocument | undefined, nextSelectedId?: string) => {
     if (!next) return;
@@ -386,7 +420,14 @@ export function FormDesigner(props: FormDesignerProps) {
       }
       draft.rules = draft.rules?.filter((rule) => !removed.has(rule.target));
     });
+    if (!next) return;
+    const removedLabel = selected.label ?? selected.id;
     commit(next, parentId);
+    setNotice({
+      tone: 'info',
+      message: `已删除“${removedLabel}”。`,
+      undoable: true,
+    });
   };
 
   const duplicateSelected = () => {
@@ -507,21 +548,23 @@ export function FormDesigner(props: FormDesignerProps) {
     );
   };
 
-  const undo = () => {
+  const undo = useCallback(() => {
     const previous = undoStack.at(-1);
     if (!previous) return;
     setUndoStack((items) => items.slice(0, -1));
     setRedoStack((items) => [...items, document]);
     onChange(previous);
-  };
+    setNotice(undefined);
+  }, [document, onChange, undoStack]);
 
-  const redo = () => {
+  const redo = useCallback(() => {
     const next = redoStack.at(-1);
     if (!next) return;
     setRedoStack((items) => items.slice(0, -1));
     setUndoStack((items) => [...items, document]);
     onChange(next);
-  };
+    setNotice(undefined);
+  }, [document, onChange, redoStack]);
 
   const reviewPatch = () => {
     try {
@@ -529,12 +572,18 @@ export function FormDesigner(props: FormDesignerProps) {
       const result = applyFormPatch(document, patch, compileOptions);
       if (result.ok) {
         commit(result.document);
-        setPatchMessage(
-          `已应用 ${patch.operations.length} 项受控变更，新 revision 为 ${result.document.revision}。`,
-        );
-      } else setPatchMessage(result.conflicts.map((item) => item.message).join(' '));
+        setPatchFeedback({
+          tone: 'success',
+          message: `已应用 ${patch.operations.length} 项受控变更，新 revision 为 ${result.document.revision}。`,
+        });
+      } else {
+        setPatchFeedback({
+          tone: 'error',
+          message: result.conflicts.map((item) => item.message).join(' '),
+        });
+      }
     } catch {
-      setPatchMessage('补丁不是有效 JSON，请检查后重试。');
+      setPatchFeedback({ tone: 'error', message: '补丁不是有效 JSON，请检查后重试。' });
     }
   };
 
@@ -543,8 +592,26 @@ export function FormDesigner(props: FormDesignerProps) {
     props.onValueChange?.(next);
   };
 
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (!event.metaKey && !event.ctrlKey) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+      if (event.key.toLocaleLowerCase() !== 'z') return;
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [redo, undo]);
+
   return (
-    <div className={`a3s-form-designer ${props.className ?? ''}`} data-testid="form-designer">
+    <div
+      className={`a3s-form-designer is-${mode} is-mobile-panel-${mobilePanel} ${props.className ?? ''}`}
+      data-mode={mode}
+      data-testid="form-designer"
+    >
       <DesignerToolbar
         mode={mode}
         viewport={viewport}
@@ -556,19 +623,26 @@ export function FormDesigner(props: FormDesignerProps) {
         onUndo={undo}
         onRedo={redo}
       />
-      <div className="a3s-form-designer-main">
-        <PalettePanel
-          document={document}
-          catalog={catalog}
-          selectedId={selectedId}
-          panel={leftPanel}
-          onPanelChange={setLeftPanel}
-          onAdd={addCatalogItem}
-          onSelect={(id) => {
-            setSelectedId(id);
-            setInspectorPanel('properties');
-          }}
-        />
+      {mode === 'design' && <MobilePanelBar panel={mobilePanel} onPanelChange={setMobilePanel} />}
+      <div className={`a3s-form-designer-main is-${mode}`}>
+        {mode === 'design' && (
+          <PalettePanel
+            document={document}
+            catalog={catalog}
+            selectedId={selectedId}
+            panel={leftPanel}
+            onPanelChange={setLeftPanel}
+            onAdd={(item) => {
+              addCatalogItem(item);
+              setMobilePanel('canvas');
+            }}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setInspectorPanel('properties');
+              setMobilePanel('settings');
+            }}
+          />
+        )}
         <main className="a3s-form-canvas" data-testid="designer-canvas">
           <div className="a3s-form-canvas-meta">
             <span className="a3s-form-canvas-context">
@@ -608,6 +682,7 @@ export function FormDesigner(props: FormDesignerProps) {
               onSelect={(id) => {
                 setSelectedId(id);
                 setInspectorPanel('properties');
+                setMobilePanel('settings');
               }}
               onCatalogDrop={(catalogId, containerId) => {
                 const item = findCatalogItem(catalogId, catalog);
@@ -630,31 +705,96 @@ export function FormDesigner(props: FormDesignerProps) {
             </div>
           )}
         </main>
-        <Inspector
-          document={document}
-          selected={selected}
-          selectedProperty={selectedProperty}
-          selectedSchema={selectedSchema}
-          availableFieldWidgets={availableFieldWidgets}
-          nodeRegistry={props.nodeRegistry}
-          panel={inspectorPanel}
-          patchText={patchText}
-          patchMessage={patchMessage}
-          onPanelChange={setInspectorPanel}
-          onUpdateNode={updateSelected}
-          onUpdateMetadata={updateMetadata}
-          onUpdateSchema={updateSchema}
-          onUpdateCustomNode={updateCustomNode}
-          onSetRequired={setRequired}
-          onUpdateOptions={updateOptions}
-          onAddLayoutItem={addLayoutItem}
-          onDuplicate={duplicateSelected}
-          onRemove={removeSelected}
-          onPatchTextChange={setPatchText}
-          onReviewPatch={reviewPatch}
-        />
+        {mode === 'design' && (
+          <Inspector
+            document={document}
+            selected={selected}
+            selectedProperty={selectedProperty}
+            selectedSchema={selectedSchema}
+            availableFieldWidgets={availableFieldWidgets}
+            nodeRegistry={props.nodeRegistry}
+            panel={inspectorPanel}
+            patchText={patchText}
+            patchFeedback={patchFeedback}
+            onPanelChange={setInspectorPanel}
+            onUpdateNode={updateSelected}
+            onUpdateMetadata={updateMetadata}
+            onUpdateSchema={updateSchema}
+            onUpdateCustomNode={updateCustomNode}
+            onSetRequired={setRequired}
+            onUpdateOptions={updateOptions}
+            onAddLayoutItem={addLayoutItem}
+            onDuplicate={duplicateSelected}
+            onRemove={removeSelected}
+            onPatchTextChange={(text) => {
+              setPatchText(text);
+              setPatchFeedback(undefined);
+            }}
+            onReviewPatch={reviewPatch}
+          />
+        )}
       </div>
+      {notice && (
+        <div
+          className={`a3s-form-designer-notice is-${notice.tone}`}
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+        >
+          <DesignerIcon name={notice.tone === 'error' ? 'alert' : 'trash'} size={15} />
+          <span>{notice.message}</span>
+          {notice.undoable && (
+            <button type="button" className="btn" data-variant="ghost" onClick={undo}>
+              撤销删除
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn"
+            data-size="icon-xs"
+            data-variant="ghost"
+            aria-label="关闭提示"
+            onClick={() => setNotice(undefined)}
+          >
+            <DesignerIcon name="close" size={13} />
+          </button>
+        </div>
+      )}
     </div>
+  );
+}
+
+function MobilePanelBar({
+  panel,
+  onPanelChange,
+}: {
+  panel: MobilePanel;
+  onPanelChange: (panel: MobilePanel) => void;
+}) {
+  const items: readonly {
+    id: MobilePanel;
+    label: string;
+    icon: 'components' | 'edit' | 'settings';
+  }[] = [
+    { id: 'components', label: '组件', icon: 'components' },
+    { id: 'canvas', label: '画布', icon: 'edit' },
+    { id: 'settings', label: '设置', icon: 'settings' },
+  ];
+  return (
+    <nav className="a3s-form-mobile-panel-bar" aria-label="设计器面板">
+      {items.map((item) => (
+        <button
+          type="button"
+          className={`btn${panel === item.id ? ' is-active' : ''}`}
+          data-variant="ghost"
+          aria-pressed={panel === item.id}
+          key={item.id}
+          onClick={() => onPanelChange(item.id)}
+        >
+          <DesignerIcon name={item.icon} size={15} />
+          {item.label}
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -696,9 +836,10 @@ function DesignerToolbar({
           onClick={onUndo}
           disabled={!canUndo}
           aria-label="撤销"
-          title="撤销"
+          aria-keyshortcuts="Control+Z Meta+Z"
+          title="撤销（⌘/Ctrl Z）"
         >
-          ↶
+          <DesignerIcon name="undo" size={16} />
         </button>
         <button
           type="button"
@@ -708,9 +849,10 @@ function DesignerToolbar({
           onClick={onRedo}
           disabled={!canRedo}
           aria-label="重做"
-          title="重做"
+          aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z"
+          title="重做（⌘/Ctrl Shift Z）"
         >
-          ↷
+          <DesignerIcon name="redo" size={16} />
         </button>
         <span className="a3s-form-toolbar-divider" />
         <fieldset className="a3s-form-segmented is-viewport" aria-label="画布尺寸">
@@ -722,7 +864,7 @@ function DesignerToolbar({
             aria-pressed={viewport === 'desktop'}
             onClick={() => onViewportChange('desktop')}
           >
-            <span className="is-desktop" aria-hidden="true" />
+            <DesignerIcon name="desktop" size={14} />
             桌面
           </button>
           <button
@@ -733,7 +875,7 @@ function DesignerToolbar({
             aria-pressed={viewport === 'mobile'}
             onClick={() => onViewportChange('mobile')}
           >
-            <span className="is-mobile" aria-hidden="true" />
+            <DesignerIcon name="mobile" size={14} />
             移动
           </button>
         </fieldset>
@@ -746,7 +888,7 @@ function DesignerToolbar({
             aria-pressed={mode === 'design'}
             onClick={() => onModeChange('design')}
           >
-            <span className="is-design" aria-hidden="true" />
+            <DesignerIcon name="edit" size={14} />
             设计
           </button>
           <button
@@ -757,7 +899,7 @@ function DesignerToolbar({
             aria-pressed={mode === 'preview'}
             onClick={() => onModeChange('preview')}
           >
-            <span className="is-preview" aria-hidden="true" />
+            <DesignerIcon name="eye" size={14} />
             预览
           </button>
         </fieldset>
@@ -799,30 +941,51 @@ function PalettePanel({
 
   return (
     <aside className="a3s-form-palette" aria-label="组件与表单结构">
-      <fieldset className="a3s-form-panel-tabs" aria-label="左侧面板">
+      <div className="a3s-form-panel-tabs" role="tablist" aria-label="左侧面板">
         <button
           type="button"
+          id="a3s-form-palette-tab-components"
+          role="tab"
+          aria-controls="a3s-form-palette-components"
+          aria-selected={panel === 'components'}
+          tabIndex={panel === 'components' ? 0 : -1}
           className={`btn${panel === 'components' ? ' is-active' : ''}`}
           data-size="xs"
           data-variant="ghost"
+          onKeyDown={(event) =>
+            handlePanelTabKey(event, ['components', 'outline'], panel, onPanelChange)
+          }
           onClick={() => onPanelChange('components')}
         >
           组件
         </button>
         <button
           type="button"
+          id="a3s-form-palette-tab-outline"
+          role="tab"
+          aria-controls="a3s-form-palette-outline"
+          aria-selected={panel === 'outline'}
+          tabIndex={panel === 'outline' ? 0 : -1}
           className={`btn${panel === 'outline' ? ' is-active' : ''}`}
           data-size="xs"
           data-variant="ghost"
+          onKeyDown={(event) =>
+            handlePanelTabKey(event, ['components', 'outline'], panel, onPanelChange)
+          }
           onClick={() => onPanelChange('outline')}
         >
           结构
         </button>
-      </fieldset>
+      </div>
       {panel === 'components' ? (
-        <div className="a3s-form-palette-content">
+        <div
+          className="a3s-form-palette-content"
+          id="a3s-form-palette-components"
+          role="tabpanel"
+          aria-labelledby="a3s-form-palette-tab-components"
+        >
           <label className="a3s-form-catalog-search">
-            <span aria-hidden="true">⌕</span>
+            <DesignerIcon name="search" size={14} />
             <input
               className="input"
               aria-label="搜索组件"
@@ -839,7 +1002,7 @@ function PalettePanel({
                 aria-label="清空组件搜索"
                 onClick={() => setQuery('')}
               >
-                ×
+                <DesignerIcon name="close" size={13} />
               </button>
             )}
           </label>
@@ -864,7 +1027,7 @@ function PalettePanel({
                       onClick={() => onAdd(item)}
                     >
                       <span className="a3s-form-palette-icon" aria-hidden="true">
-                        {item.glyph}
+                        <CatalogIcon id={item.id} fallback={item.glyph} />
                       </span>
                       <span>
                         <strong>{item.label}</strong>
@@ -877,7 +1040,9 @@ function PalettePanel({
             ))}
             {visibleCatalog.length === 0 && (
               <div className="a3s-form-catalog-empty">
-                <span aria-hidden="true">⌕</span>
+                <span aria-hidden="true">
+                  <DesignerIcon name="search" size={18} />
+                </span>
                 <strong>没有匹配的组件</strong>
                 <small>试试“文本”“日期”或“布局”</small>
               </div>
@@ -885,7 +1050,12 @@ function PalettePanel({
           </div>
         </div>
       ) : (
-        <div className="a3s-form-outline-panel">
+        <div
+          className="a3s-form-outline-panel"
+          id="a3s-form-palette-outline"
+          role="tabpanel"
+          aria-labelledby="a3s-form-palette-tab-outline"
+        >
           <div className="a3s-form-outline-summary">
             <span>页面结构</span>
             <strong>{document.ui.nodes.length} 个节点</strong>
@@ -897,6 +1067,7 @@ function PalettePanel({
                 role="treeitem"
                 aria-label={`选择${node.label ?? node.id}`}
                 aria-selected={selectedId === node.id}
+                aria-level={nodeDepth(document, node.id) + 1}
                 data-node-id={node.id}
                 className={`btn${selectedId === node.id ? ' is-selected' : ''}`}
                 data-size="sm"
@@ -906,7 +1077,10 @@ function PalettePanel({
                 onClick={() => onSelect(node.id)}
               >
                 <span aria-hidden="true">
-                  {node.kind === 'field' || node.kind === 'repeater' ? '◇' : '▣'}
+                  <DesignerIcon
+                    name={node.kind === 'field' || node.kind === 'repeater' ? 'field' : 'layout'}
+                    size={13}
+                  />
                 </span>
                 <span>{node.label ?? node.id}</span>
                 <small>{node.kind}</small>
@@ -928,7 +1102,7 @@ function Inspector(props: {
   nodeRegistry?: FormNodeRegistry;
   panel: InspectorPanel;
   patchText: string;
-  patchMessage: string;
+  patchFeedback: PatchFeedback | undefined;
   onPanelChange: (panel: InspectorPanel) => void;
   onUpdateNode: (changes: Partial<UiNode>) => void;
   onUpdateMetadata: (changes: Partial<FormDocument['metadata']>) => void;
@@ -943,43 +1117,67 @@ function Inspector(props: {
   onReviewPatch: () => void;
 }) {
   const { selected } = props;
+  const panels: readonly InspectorPanel[] = ['properties', 'validation', 'agent'];
   return (
     <aside className="a3s-form-inspector" aria-label="属性面板">
-      <fieldset className="a3s-form-panel-tabs is-inspector" aria-label="属性面板标签">
+      <div className="a3s-form-panel-tabs is-inspector" role="tablist" aria-label="属性面板标签">
         <button
           type="button"
+          id="a3s-form-inspector-tab-properties"
+          role="tab"
+          aria-controls="a3s-form-inspector-panel"
+          aria-selected={props.panel === 'properties'}
+          tabIndex={props.panel === 'properties' ? 0 : -1}
           className={`btn${props.panel === 'properties' ? ' is-active' : ''}`}
           data-size="xs"
           data-variant="ghost"
+          onKeyDown={(event) => handlePanelTabKey(event, panels, props.panel, props.onPanelChange)}
           onClick={() => props.onPanelChange('properties')}
         >
           属性
         </button>
         <button
           type="button"
+          id="a3s-form-inspector-tab-validation"
+          role="tab"
+          aria-controls="a3s-form-inspector-panel"
+          aria-selected={props.panel === 'validation'}
+          tabIndex={props.panel === 'validation' ? 0 : -1}
           className={`btn${props.panel === 'validation' ? ' is-active' : ''}`}
           data-size="xs"
           data-variant="ghost"
+          onKeyDown={(event) => handlePanelTabKey(event, panels, props.panel, props.onPanelChange)}
           onClick={() => props.onPanelChange('validation')}
         >
           校验
         </button>
         <button
           type="button"
-          className={`btn${props.panel === 'advanced' ? ' is-active' : ''}`}
+          id="a3s-form-inspector-tab-agent"
+          role="tab"
+          aria-controls="a3s-form-inspector-panel"
+          aria-selected={props.panel === 'agent'}
+          tabIndex={props.panel === 'agent' ? 0 : -1}
+          className={`btn${props.panel === 'agent' ? ' is-active' : ''}`}
           data-size="xs"
           data-variant="ghost"
-          onClick={() => props.onPanelChange('advanced')}
+          onKeyDown={(event) => handlePanelTabKey(event, panels, props.panel, props.onPanelChange)}
+          onClick={() => props.onPanelChange('agent')}
         >
-          高级
+          Agent
         </button>
-      </fieldset>
-      <div className="a3s-form-inspector-body">
-        {props.panel === 'advanced' ? (
+      </div>
+      <div
+        className="a3s-form-inspector-body"
+        id="a3s-form-inspector-panel"
+        role="tabpanel"
+        aria-labelledby={`a3s-form-inspector-tab-${props.panel}`}
+      >
+        {props.panel === 'agent' ? (
           <PatchPanel
             document={props.document}
             patchText={props.patchText}
-            patchMessage={props.patchMessage}
+            patchFeedback={props.patchFeedback}
             onTextChange={props.onPatchTextChange}
             onReview={props.onReviewPatch}
           />
@@ -1316,44 +1514,114 @@ function ValidationPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
 function PatchPanel({
   document,
   patchText,
-  patchMessage,
+  patchFeedback,
   onTextChange,
   onReview,
 }: {
   document: FormDocument;
   patchText: string;
-  patchMessage: string;
+  patchFeedback: PatchFeedback | undefined;
   onTextChange: (text: string) => void;
   onReview: () => void;
 }) {
+  const preflight = useMemo(() => inspectPatchText(patchText), [patchText]);
+  const template = JSON.stringify(
+    {
+      apiVersion: 'a3s.dev/form-patch/v1alpha1',
+      baseRevision: document.revision,
+      operations: [],
+    },
+    null,
+    2,
+  );
   return (
     <section className="a3s-form-patch-review">
       <div className="a3s-form-inspector-heading">
-        <span>开发者工具</span>
-        <strong>结构化补丁</strong>
+        <span>受控变更通道</span>
+        <strong>Agent 补丁</strong>
       </div>
-      <p>仅接受绑定当前 revision 的类型化 FormPatch，应用前会完整编译。</p>
+      <p>
+        Agent 提交 FormPatch，编辑器负责版本校验、冲突检查和完整编译。这里不会直接执行模型输出。
+      </p>
+      <fieldset className="a3s-form-patch-contract" aria-label="FormPatch 当前状态">
+        <span>
+          当前 revision
+          <strong>{document.revision}</strong>
+        </span>
+        <span>
+          协议
+          <strong>v1alpha1</strong>
+        </span>
+      </fieldset>
+      <div className="a3s-form-patch-editor-heading">
+        <label htmlFor="a3s-form-patch-editor">FormPatch JSON</label>
+        <button
+          type="button"
+          className="btn"
+          data-size="xs"
+          data-variant="ghost"
+          onClick={() => onTextChange(template)}
+        >
+          载入空补丁
+        </button>
+      </div>
       <textarea
-        aria-label="FormPatch JSON"
+        id="a3s-form-patch-editor"
         value={patchText}
         onChange={(event) => onTextChange(event.target.value)}
-        placeholder={`{"apiVersion":"a3s.dev/form-patch/v1alpha1","baseRevision":${document.revision},"operations":[]}`}
+        placeholder={template}
+        spellCheck={false}
       />
+      <div
+        className={`a3s-form-patch-preflight is-${preflight.tone}`}
+        role="status"
+        aria-live="polite"
+      >
+        <DesignerIcon name={preflight.tone === 'error' ? 'alert' : 'sparkles'} size={14} />
+        <span>{preflight.message}</span>
+      </div>
       <button
         type="button"
         className="a3s-form-primary-action btn"
         data-variant="primary"
+        disabled={!patchText.trim()}
         onClick={onReview}
       >
-        校验并应用
+        校验并应用补丁
       </button>
-      {patchMessage && (
-        <div className="a3s-form-patch-message" role="status">
-          {patchMessage}
+      {patchFeedback && (
+        <div
+          className={`a3s-form-patch-message is-${patchFeedback.tone}`}
+          role={patchFeedback.tone === 'error' ? 'alert' : 'status'}
+        >
+          <DesignerIcon
+            name={patchFeedback.tone === 'error' ? 'alert' : 'check-square'}
+            size={14}
+          />
+          <span>{patchFeedback.message}</span>
         </div>
       )}
     </section>
   );
+}
+
+function inspectPatchText(text: string): { tone: 'idle' | 'ready' | 'error'; message: string } {
+  if (!text.trim()) return { tone: 'idle', message: '载入模板或粘贴 Agent 生成的补丁。' };
+  try {
+    const patch = JSON.parse(text) as Partial<FormPatch>;
+    if (!Array.isArray(patch.operations)) {
+      return { tone: 'error', message: 'operations 必须是数组。' };
+    }
+    if (typeof patch.baseRevision !== 'number') {
+      return { tone: 'error', message: 'baseRevision 必须是数字。' };
+    }
+    return {
+      tone: 'ready',
+      message: `JSON 格式正确 · ${patch.operations.length} 项操作 · 基于 revision ${patch.baseRevision}`,
+    };
+  } catch {
+    return { tone: 'error', message: 'JSON 尚未闭合或格式有误。' };
+  }
 }
 
 function Control({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -1396,6 +1664,27 @@ function Toggle({
 
 function numberOrUndefined(value: string): number | undefined {
   return value === '' ? undefined : Number(value);
+}
+
+function handlePanelTabKey<T extends string>(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  panels: readonly T[],
+  current: T,
+  onChange: (panel: T) => void,
+) {
+  const index = panels.indexOf(current);
+  if (index < 0) return;
+  let nextIndex: number | undefined;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = panels.length - 1;
+  if (event.key === 'ArrowRight') nextIndex = (index + 1) % panels.length;
+  if (event.key === 'ArrowLeft') nextIndex = (index - 1 + panels.length) % panels.length;
+  if (nextIndex === undefined) return;
+  event.preventDefault();
+  onChange(panels[nextIndex]);
+  const tabs =
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+  tabs?.[nextIndex]?.focus();
 }
 
 function nodeDepth(
