@@ -123,6 +123,11 @@ export interface DataSourceDefinition {
   registryKey: string;
   parameters?: JsonObject;
   cacheTtlMs?: number;
+  dependencies?: string[];
+  trigger?: 'mount' | 'focus';
+  searchable?: boolean;
+  debounceMs?: number;
+  pageSize?: number;
 }
 
 export interface ActionDefinition {
@@ -340,9 +345,18 @@ export interface AsyncValidationEvaluation extends FormValueEvaluation {
 export interface DataSourceRequest {
   definition: DataSourceDefinition;
   query?: string;
+  cursor?: string;
+  limit?: number;
   value: JsonObject;
   locale: string;
 }
+
+export interface DataSourcePage {
+  options: UiOption[];
+  nextCursor?: string;
+}
+
+export type DataSourceResponse = UiOption[] | DataSourcePage;
 
 export interface ActionRequest {
   definition: ActionDefinition;
@@ -351,7 +365,10 @@ export interface ActionRequest {
 }
 
 export interface FormHostAdapter {
-  resolveDataSource?: (request: DataSourceRequest, signal: AbortSignal) => Promise<UiOption[]>;
+  resolveDataSource?: (
+    request: DataSourceRequest,
+    signal: AbortSignal,
+  ) => Promise<DataSourceResponse>;
   validateValue?: FormAsyncValidator;
   // biome-ignore lint/suspicious/noConfusingVoidType: Host actions may intentionally return no payload.
   invokeAction?: (request: ActionRequest, signal: AbortSignal) => Promise<JsonValue | void>;

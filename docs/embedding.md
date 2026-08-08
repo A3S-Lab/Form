@@ -106,7 +106,7 @@ renderer.addEventListener('value-change', (event) => updateDraft(event.detail));
 renderer.addEventListener('form-action', (event) => runHostAction(event.detail));
 ```
 
-See [Host-owned asynchronous validation](async-validation.md) for the `validateValue` adapter contract, field and submit scopes, cancellation behavior, and stable `async.<code>` mapping.
+See [Host-owned asynchronous validation](async-validation.md) for the `validateValue` adapter contract and [Host-owned data sources](data-sources.md) for dependency-aware option loading, search, pagination, cache isolation, and cancellation.
 
 ## CSS boundary
 

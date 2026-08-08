@@ -159,6 +159,66 @@ describe('form compiler', () => {
     );
   });
 
+  it('closes data-source definitions and dependency paths', () => {
+    const document = createDocument();
+    document.dataSources = [
+      {
+        id: 'models',
+        registryKey: 'workflow.models',
+        dependencies: ['active', 'missing', 'active'],
+        trigger: 'manual' as never,
+        searchable: 'yes' as never,
+        cacheTtlMs: 86_400_001,
+        debounceMs: -1,
+        pageSize: 201,
+        parameters: { invalid: Number.NaN },
+        endpoint: 'https://forbidden.example',
+      } as never,
+      { id: 'models', registryKey: '' },
+      { id: '', registryKey: 'workflow.empty' },
+      { id: 'invalid-dependency', registryKey: 'workflow.invalid', dependencies: [1 as never] },
+      {
+        id: 'too-many-dependencies',
+        registryKey: 'workflow.large',
+        dependencies: Array.from({ length: 33 }, (_, index) => `field${index}`),
+      },
+    ];
+
+    expect(codes(compileForm(document))).toEqual(
+      expect.arrayContaining([
+        'data_source.dependency_reference',
+        'data_source.dependency_duplicate',
+        'data_source.dependency',
+        'data_source.dependencies',
+        'data_source.trigger',
+        'data_source.searchable',
+        'data_source.cache_ttl',
+        'data_source.debounce',
+        'data_source.page_size',
+        'data_source.parameters',
+        'data_source.keyword',
+        'data_source.duplicate',
+        'data_source.registry_key',
+        'data_source.id',
+      ]),
+    );
+  });
+
+  it('normalizes bounded data-source orchestration defaults', () => {
+    const result = compileForm(createDocument());
+    expect(result.plan?.dataSources[0]).toEqual({
+      id: 'roles',
+      registryKey: 'test.roles',
+      parameters: {},
+      dependencies: [],
+      trigger: 'mount',
+      searchable: false,
+      cacheTtlMs: 0,
+      debounceMs: 250,
+      pageSize: 50,
+    });
+  });
+
   it('validates rule definitions, size, targets, duplicates and dependency cycles', () => {
     const malformed = createDocument();
     malformed.rules?.push(null as never);

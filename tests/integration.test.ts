@@ -228,7 +228,10 @@ describe('Workflow and Cloud seams', () => {
       context,
       resolveDataSource: async (cloud, request) => {
         received = { organizationId: cloud.organizationId, source: request.definition.id };
-        return [{ label: '研发', value: 'engineering' }];
+        return {
+          options: [{ label: '研发', value: 'engineering' }],
+          nextCursor: 'next-page',
+        };
       },
       invokeAction: async (cloud, request) => ({
         organizationId: cloud.organizationId,
@@ -251,11 +254,13 @@ describe('Workflow and Cloud seams', () => {
       ReturnType<typeof compileForm>['plan']
     >;
     const signal = new AbortController().signal;
-    const options = await adapter.resolveDataSource?.(
+    const response = await adapter.resolveDataSource?.(
       { definition: plan.dataSources[0], value: {}, locale: 'zh-CN' },
       signal,
     );
+    const options = Array.isArray(response) ? response : response?.options;
     expect(options?.[0].value).toBe('engineering');
+    expect(Array.isArray(response) ? undefined : response?.nextCursor).toBe('next-page');
     expect(received).toEqual({ organizationId: 'org-1', source: 'roles' });
     const action = await adapter.invokeAction?.(
       { definition: plan.actions[0], value: {}, plan },

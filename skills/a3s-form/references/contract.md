@@ -80,3 +80,9 @@ Modes are `configuration`, `interaction`, and `read-only`. The host owns storage
 `FormHostAdapter.validateValue` receives a cloned value, the immutable plan, locale, trigger, and either a field or form scope. It returns `{ "issues": [{ "path": "field", "code": "stable_code", "message": "..." }] }`. Codes map to `async.<code>`. Do not put endpoints, credentials, or executable validation logic in `FormDocument`.
 
 Field validation runs on blur. Form validation runs before a primary submit action. A controlled value change aborts pending work, and late responses must not update the current form. Protected business rules must run again inside the host's server-side commit transaction.
+
+## Host data sources
+
+Data-source definitions use a stable `id` and host-approved `registryKey`. Optional controls are `parameters`, declared `dependencies`, `trigger` (`mount` or `focus`), `searchable`, `debounceMs`, `pageSize`, and `cacheTtlMs`. A UI node references the definition through `dataSource`.
+
+Do not put URLs, tokens, headers, or executable resolver logic in a document. The host resolver owns authorization and may return `UiOption[]` or `{ "options": [...], "nextCursor": "..." }`. Dependency paths must exist in the schema; unrelated value paths must not be added merely to force broad refreshes.

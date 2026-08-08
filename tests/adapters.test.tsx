@@ -36,7 +36,7 @@ describe('framework adapters', () => {
     const hostAdapter = vueRef<FormHostAdapter | undefined>({
       resolveDataSource: async (request) => {
         resolvedLocales.push(request.locale);
-        return [{ label: 'Operator', value: 'member' }];
+        return { options: [{ label: 'Operator', value: 'member' }] };
       },
       validateValue: async (request) => {
         validationScopes.push(request.scope.kind);
@@ -66,6 +66,7 @@ describe('framework adapters', () => {
     app.mount(container);
     await nextTick();
     await waitFor(() => expect(resolvedLocales).toContain('en-US'));
+    expect(await waitFor(() => container.querySelector('option[value="member"]'))).toBeTruthy();
     expect(container.textContent).toContain('This value changed in the workflow.');
     const name = await waitFor(() => {
       const input = container.querySelector('input[id*="name"]') as HTMLInputElement | null;
@@ -247,7 +248,7 @@ describe('framework adapters', () => {
     element.hostAdapter = {
       resolveDataSource: async (request) => {
         locales.push(request.locale);
-        return [{ label: 'Operator', value: 'member' }];
+        return { options: [{ label: 'Operator', value: 'member' }] };
       },
     };
     element.locale = 'en-US';
@@ -264,6 +265,7 @@ describe('framework adapters', () => {
 
     document.body.append(element);
     await waitFor(() => expect(locales).toContain('en-US'));
+    await waitFor(() => expect(element.querySelector('option[value="member"]')).toBeTruthy());
     await waitFor(() =>
       expect((element.querySelector('input[id*="name"]') as HTMLInputElement).disabled).toBe(true),
     );

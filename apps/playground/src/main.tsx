@@ -22,9 +22,36 @@ import {
 } from './workspace';
 import { type WorkspaceTemplateId, WorkspaceView } from './workspace-view';
 
-const playgroundCapabilities = { widgets: Object.keys(playgroundNodeRegistry) };
+const playgroundCapabilities = {
+  widgets: Object.keys(playgroundNodeRegistry),
+  dataSources: ['playground.workflow.models'],
+};
 const playgroundSeeds = [{ id: 'employee-onboarding', document: sampleForm }, ...workflowFormSeeds];
 const playgroundHostAdapter: FormHostAdapter = {
+  resolveDataSource: async (request) => {
+    if (request.definition.registryKey !== 'playground.workflow.models') return [];
+    const catalog = [
+      { label: 'GPT-5', value: 'gpt-5' },
+      { label: 'GPT-4.1', value: 'gpt-4.1' },
+      { label: 'Claude Sonnet 4', value: 'claude-sonnet-4' },
+      { label: 'Claude Haiku 3.5', value: 'claude-haiku-3.5' },
+      { label: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' },
+      { label: 'DeepSeek V3', value: 'deepseek-v3' },
+    ];
+    const query = request.query?.trim().toLocaleLowerCase() ?? '';
+    const filtered = query
+      ? catalog.filter((option) => option.label.toLocaleLowerCase().includes(query))
+      : catalog;
+    const offset = request.cursor ? Number.parseInt(request.cursor, 10) : 0;
+    const start = Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
+    const limit = request.limit ?? 3;
+    const options = filtered.slice(start, start + limit);
+    const next = start + options.length;
+    return {
+      options,
+      nextCursor: next < filtered.length ? String(next) : undefined,
+    };
+  },
   validateValue: async (request) => ({
     issues:
       request.value.email === 'used@a3s.dev'

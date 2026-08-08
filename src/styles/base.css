@@ -1586,6 +1586,86 @@
   line-height: 17px;
 }
 
+.a3s-form-data-source-search {
+  position: relative;
+  display: block;
+}
+
+.a3s-form-data-source-search > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.a3s-form-data-source-search > input[type="search"] {
+  padding-left: 34px;
+  background-image:
+    radial-gradient(
+      circle at 15px 17px,
+      transparent 5px,
+      var(--a3s-form-subtle) 5.5px 6.5px,
+      transparent 7px
+    ),
+    linear-gradient(45deg, transparent 48%, var(--a3s-form-subtle) 49% 56%, transparent 57%);
+  background-position:
+    0 0,
+    19px 21px;
+  background-repeat: no-repeat;
+  background-size:
+    30px 34px,
+    7px 7px;
+}
+
+.a3s-form-data-source-status {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--a3s-form-muted);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.a3s-form-data-source-status > div {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.a3s-form-data-source-status[data-status="error"] {
+  color: var(--a3s-form-red);
+}
+
+.a3s-form-data-source-status button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--a3s-form-line-strong);
+  border-radius: 7px;
+  background: var(--a3s-form-panel);
+  color: var(--a3s-form-ink);
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.a3s-form-data-source-status button:hover:not(:disabled) {
+  border-color: var(--a3s-form-field-border-hover);
+  background: var(--a3s-form-panel-soft);
+}
+
+.a3s-form-data-source-status button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 .a3s-form-field > label.is-required::after,
 .a3s-form-repeater > legend.is-required::after,
 .a3s-form-check.is-required > span::after {

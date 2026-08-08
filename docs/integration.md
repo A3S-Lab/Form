@@ -194,6 +194,14 @@ const hostAdapter = createA3SCloudFormAdapter({
 
 The adapter binds context only. Authorization, tenant isolation, rate limits, storage, secrets, and audit remain Cloud responsibilities.
 
+## Dynamic option sources
+
+`FormHostAdapter.resolveDataSource` accepts the source definition, the current controlled value, locale, optional search query and cursor, and a cancellation signal. It may return a legacy `UiOption[]` or a paginated `{ options, nextCursor? }` page.
+
+Declare only the value paths that affect a source in `dependencies`. The Renderer then avoids refetching after unrelated edits, cancels work after dependency changes, and deduplicates matching requests within the current embedded instance. Search, focus triggers, TTL caching, pagination, and failure states use the same contract in React, Vue, and Web Components.
+
+See [Host-owned data sources](data-sources.md) for the complete contract and security boundary.
+
 ## Durable workflow interactions
 
 ```ts

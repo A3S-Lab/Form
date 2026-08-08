@@ -10,6 +10,7 @@ import type {
   UiNodeKind,
   UiOption,
 } from '../core';
+import type { FormDataSourceState } from './data-source';
 
 export type CustomFormNodeKind = Exclude<UiNodeKind, 'root'>;
 
@@ -37,10 +38,12 @@ export interface FormNodeRenderProps {
   invalid: boolean;
   errors: FieldError[];
   options: UiOption[];
+  dataSource: FormDataSourceState;
   children?: ReactNode;
   onChange: (value: JsonValue) => void;
   onFormChange: (value: JsonObject) => void;
   onBlur?: () => void;
+  onFocus?: () => void;
 }
 
 export interface FormNodeInspectorProps {

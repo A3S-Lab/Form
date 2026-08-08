@@ -1,5 +1,6 @@
 import type {
   ActionDefinition,
+  DataSourceDefinition,
   FormDocument,
   JsonObject,
   JsonSchema,
@@ -29,6 +30,7 @@ interface WorkflowFieldSpec {
   width?: 1 | 2 | 3 | 4 | 6 | 12;
   options?: readonly UiOption[];
   readOnly?: boolean;
+  dataSource?: string;
 }
 
 export interface WorkflowNodeDescriptorSnapshot {
@@ -39,6 +41,7 @@ export interface WorkflowNodeDescriptorSnapshot {
   properties: Record<string, JsonSchema>;
   required?: readonly string[];
   fields: readonly WorkflowFieldSpec[];
+  dataSources?: readonly DataSourceDefinition[];
   note: string;
 }
 
@@ -75,6 +78,7 @@ function createWorkflowForm(spec: WorkflowNodeDescriptorSnapshot): FormDocument 
     placeholder: field.placeholder,
     width: field.width ?? 12,
     options: field.options ? [...field.options] : undefined,
+    dataSource: field.dataSource,
     readOnly: field.readOnly,
   }));
 
@@ -134,6 +138,7 @@ function createWorkflowForm(spec: WorkflowNodeDescriptorSnapshot): FormDocument 
       ],
     },
     rules: [],
+    dataSources: spec.dataSources?.map((source) => structuredClone(source)) ?? [],
     actions: workflowActions,
   };
 }
@@ -200,6 +205,8 @@ export const workflowNodeDescriptors: readonly WorkflowNodeDescriptorSnapshot[] 
       {
         key: 'model',
         label: '模型（model）',
+        widget: 'select',
+        dataSource: 'models',
         placeholder: '留空使用 Runtime 默认模型',
         width: 12,
       },
@@ -216,6 +223,17 @@ export const workflowNodeDescriptors: readonly WorkflowNodeDescriptorSnapshot[] 
         widget: 'textarea',
         placeholder: '{{input.prompt}}',
         width: 12,
+      },
+    ],
+    dataSources: [
+      {
+        id: 'models',
+        registryKey: 'playground.workflow.models',
+        trigger: 'focus',
+        searchable: true,
+        debounceMs: 180,
+        pageSize: 3,
+        cacheTtlMs: 30_000,
       },
     ],
     note: '字段严格对应默认配置：model、system、prompt。',
@@ -252,6 +270,8 @@ export const workflowNodeDescriptors: readonly WorkflowNodeDescriptorSnapshot[] 
       {
         key: 'model',
         label: '模型（model）',
+        widget: 'select',
+        dataSource: 'models',
         placeholder: '留空使用 Runtime 默认模型',
         width: 12,
       },
@@ -275,6 +295,17 @@ export const workflowNodeDescriptors: readonly WorkflowNodeDescriptorSnapshot[] 
         widget: 'a3s.json',
         description: '默认值：[]',
         width: 12,
+      },
+    ],
+    dataSources: [
+      {
+        id: 'models',
+        registryKey: 'playground.workflow.models',
+        trigger: 'focus',
+        searchable: true,
+        debounceMs: 180,
+        pageSize: 3,
+        cacheTtlMs: 30_000,
       },
     ],
     note: '字段严格对应默认配置：model、prompt、maxIterations、tools。',
@@ -458,7 +489,7 @@ export const workflowNodeKinds: readonly WorkflowNodeKind[] = workflowNodeDescri
 export const workflowFormSeeds: readonly PlaygroundWorkspaceSeed[] = workflowNodeDescriptors.map(
   (descriptor) => ({
     id: `workflow-${descriptor.kind}-config`,
-    seedVersion: 2,
+    seedVersion: 3,
     document: createWorkflowForm(descriptor),
   }),
 );

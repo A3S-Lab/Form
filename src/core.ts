@@ -1,6 +1,7 @@
 export * from './core/async-validation';
 export * from './core/canonical';
 export * from './core/compiler';
+export * from './core/data-source';
 export * from './core/expression';
 export * from './core/patch';
 export * from './core/pointer';

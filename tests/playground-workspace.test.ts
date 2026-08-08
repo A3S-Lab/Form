@@ -96,7 +96,7 @@ describe('Playground workspace storage', () => {
     );
     const template = upgraded.forms.find((record) => record.id === templateSeed.id);
 
-    expect(template?.seedVersion).toBe(2);
+    expect(template?.seedVersion).toBe(3);
     expect(template?.createdAt).toBe(now.toISOString());
     expect(Object.keys(template?.document.schema.properties ?? {})).toEqual(['value']);
   });

@@ -37,6 +37,25 @@ export const DEFAULT_WIDGETS = Object.freeze([
   'password',
 ]);
 
+export const DATA_SOURCE_LIMITS = Object.freeze({
+  maxDependencies: 32,
+  maxCacheTtlMs: 86_400_000,
+  maxDebounceMs: 5_000,
+  maxPageSize: 200,
+});
+
+const DATA_SOURCE_KEYS = new Set([
+  'id',
+  'registryKey',
+  'parameters',
+  'dependencies',
+  'trigger',
+  'searchable',
+  'debounceMs',
+  'pageSize',
+  'cacheTtlMs',
+]);
+
 function diagnostic(
   code: string,
   message: string,
@@ -51,6 +70,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isJsonValue(value: unknown): boolean {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
+function isBoundedInteger(value: unknown, minimum: number, maximum: number): value is number {
+  return (
+    Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum
+  );
+}
+
 function normalize(document: FormDocument): FormDocument {
   const normalized = structuredClone(document);
   normalized.metadata.locale ??= 'zh-CN';
@@ -58,6 +90,15 @@ function normalize(document: FormDocument): FormDocument {
   normalized.rules ??= [];
   normalized.dataSources ??= [];
   normalized.actions ??= [];
+  for (const source of normalized.dataSources) {
+    source.parameters ??= {};
+    source.dependencies ??= [];
+    source.trigger ??= 'mount';
+    source.searchable ??= false;
+    source.cacheTtlMs ??= 0;
+    source.debounceMs ??= 250;
+    source.pageSize ??= 50;
+  }
   for (const node of normalized.ui.nodes) {
     if (node.kind !== 'field' && node.kind !== 'content') node.children ??= [];
     if (node.kind === 'field') node.widget ??= 'text';
@@ -298,12 +339,163 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
         );
     }
   }
+  const dataSourceIds = new Set<string>();
   for (const [index, source] of (document.dataSources ?? []).entries()) {
-    if (!isRecord(source) || typeof source.registryKey !== 'string') {
+    const path = `/dataSources/${index}`;
+    if (!isRecord(source)) {
       diagnostics.push(
-        diagnostic('data_source.definition', '数据源定义无效。', `/dataSources/${index}`),
+        diagnostic('data_source.definition', 'Data-source definition must be an object.', path),
       );
       continue;
+    }
+    for (const key of Object.keys(source)) {
+      if (DATA_SOURCE_KEYS.has(key)) continue;
+      const pointerKey = key.replaceAll('~', '~0').replaceAll('/', '~1');
+      diagnostics.push(
+        diagnostic(
+          'data_source.keyword',
+          `Unsupported data-source property ${key}.`,
+          `${path}/${pointerKey}`,
+        ),
+      );
+    }
+    if (typeof source.id !== 'string' || source.id.trim().length === 0) {
+      diagnostics.push(
+        diagnostic('data_source.id', 'Data-source id must be a non-empty string.', `${path}/id`),
+      );
+    } else if (dataSourceIds.has(source.id)) {
+      diagnostics.push(
+        diagnostic(
+          'data_source.duplicate',
+          `Data-source id ${source.id} is duplicated.`,
+          `${path}/id`,
+        ),
+      );
+    } else {
+      dataSourceIds.add(source.id);
+    }
+    if (typeof source.registryKey !== 'string' || source.registryKey.trim().length === 0) {
+      diagnostics.push(
+        diagnostic(
+          'data_source.registry_key',
+          'Data-source registryKey must be a non-empty string.',
+          `${path}/registryKey`,
+        ),
+      );
+    }
+    if (
+      source.parameters !== undefined &&
+      (!isRecord(source.parameters) || !isJsonValue(source.parameters))
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'data_source.parameters',
+          'Data-source parameters must be a JSON object with finite values.',
+          `${path}/parameters`,
+        ),
+      );
+    }
+    if (source.dependencies !== undefined) {
+      if (
+        !Array.isArray(source.dependencies) ||
+        source.dependencies.length > DATA_SOURCE_LIMITS.maxDependencies
+      ) {
+        diagnostics.push(
+          diagnostic(
+            'data_source.dependencies',
+            `Data-source dependencies must contain at most ${DATA_SOURCE_LIMITS.maxDependencies} paths.`,
+            `${path}/dependencies`,
+          ),
+        );
+      } else {
+        const dependencies = new Set<string>();
+        for (const [dependencyIndex, dependency] of source.dependencies.entries()) {
+          const dependencyPath = `${path}/dependencies/${dependencyIndex}`;
+          if (typeof dependency !== 'string' || dependency.trim().length === 0) {
+            diagnostics.push(
+              diagnostic(
+                'data_source.dependency',
+                'Data-source dependency must be a non-empty value path.',
+                dependencyPath,
+              ),
+            );
+            continue;
+          }
+          if (dependencies.has(dependency)) {
+            diagnostics.push(
+              diagnostic(
+                'data_source.dependency_duplicate',
+                `Data-source dependency ${dependency} is duplicated.`,
+                dependencyPath,
+              ),
+            );
+          }
+          dependencies.add(dependency);
+          if (!schemaHasValuePath(document.schema, dependency)) {
+            diagnostics.push(
+              diagnostic(
+                'data_source.dependency_reference',
+                `Data-source dependency ${dependency} is not declared by the schema.`,
+                dependencyPath,
+              ),
+            );
+          }
+        }
+      }
+    }
+    if (source.trigger !== undefined && !['mount', 'focus'].includes(source.trigger as string)) {
+      diagnostics.push(
+        diagnostic(
+          'data_source.trigger',
+          'Data-source trigger must be mount or focus.',
+          `${path}/trigger`,
+        ),
+      );
+    }
+    if (source.searchable !== undefined && typeof source.searchable !== 'boolean') {
+      diagnostics.push(
+        diagnostic(
+          'data_source.searchable',
+          'Data-source searchable must be a boolean.',
+          `${path}/searchable`,
+        ),
+      );
+    }
+    if (
+      source.cacheTtlMs !== undefined &&
+      !isBoundedInteger(source.cacheTtlMs, 0, DATA_SOURCE_LIMITS.maxCacheTtlMs)
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'data_source.cache_ttl',
+          `Data-source cacheTtlMs must be an integer from 0 to ${DATA_SOURCE_LIMITS.maxCacheTtlMs}.`,
+          `${path}/cacheTtlMs`,
+        ),
+      );
+    }
+    if (
+      source.debounceMs !== undefined &&
+      !isBoundedInteger(source.debounceMs, 0, DATA_SOURCE_LIMITS.maxDebounceMs)
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'data_source.debounce',
+          `Data-source debounceMs must be an integer from 0 to ${DATA_SOURCE_LIMITS.maxDebounceMs}.`,
+          `${path}/debounceMs`,
+        ),
+      );
+    }
+    if (
+      source.pageSize !== undefined &&
+      !isBoundedInteger(source.pageSize, 1, DATA_SOURCE_LIMITS.maxPageSize)
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'data_source.page_size',
+          `Data-source pageSize must be an integer from 1 to ${DATA_SOURCE_LIMITS.maxPageSize}.`,
+          `${path}/pageSize`,
+        ),
+      );
     }
     if (dataSourceCapabilities.size > 0 && !dataSourceCapabilities.has(source.registryKey)) {
       diagnostics.push(

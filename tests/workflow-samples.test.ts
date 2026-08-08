@@ -26,7 +26,7 @@ describe('A3S Workflow node configuration examples', () => {
     expect(workflowFormSeeds.map((seed) => seed.id)).toEqual(
       expectedKinds.map((kind) => `workflow-${kind}-config`),
     );
-    expect(workflowFormSeeds.every((seed) => seed.seedVersion === 2)).toBe(true);
+    expect(workflowFormSeeds.every((seed) => seed.seedVersion === 3)).toBe(true);
   });
 
   it('keeps every bundled example compilable with the playground registry', () => {
@@ -55,6 +55,24 @@ describe('A3S Workflow node configuration examples', () => {
           .filter((node) => node.kind === 'field')
           .map((node) => node.schemaPath?.replace('/properties/', '')),
       ).toEqual(Object.keys(expected));
+    }
+  });
+
+  it('uses a host-owned searchable catalog for workflow model fields', () => {
+    for (const kind of ['llm', 'agent']) {
+      const seed = workflowFormSeeds.find(
+        (candidate) => candidate.id === `workflow-${kind}-config`,
+      );
+      const model = seed?.document.ui.nodes.find((node) => node.schemaPath === '/properties/model');
+      expect(model).toEqual(expect.objectContaining({ widget: 'select', dataSource: 'models' }));
+      expect(seed?.document.dataSources).toEqual([
+        expect.objectContaining({
+          id: 'models',
+          registryKey: 'playground.workflow.models',
+          trigger: 'focus',
+          searchable: true,
+        }),
+      ]);
     }
   });
 });

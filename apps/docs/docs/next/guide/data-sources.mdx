@@ -1,0 +1,23 @@
+# Host-owned data sources
+
+The `next` runtime resolves dynamic options through the embedding host. A form document stores an approved registry key and bounded orchestration settings, never an endpoint or credential.
+
+```ts
+const hostAdapter = {
+  async resolveDataSource(request, signal) {
+    return modelCatalog.list({
+      provider: request.value.provider,
+      query: request.query,
+      cursor: request.cursor,
+      limit: request.limit,
+      signal,
+    });
+  },
+};
+```
+
+Definitions support declared dependencies, `mount` or `focus` triggers, TTL caching, debounced search, and cursor pagination. The Renderer deduplicates identical in-flight work, cancels superseded requests, and keeps its cache inside the current host-adapter boundary. Unrelated field changes do not refetch a source.
+
+Loading, dependency-blocked, empty, error/retry, and load-more states are part of the accessible runtime. Legacy option arrays and paginated `{ options, nextCursor }` responses are both supported and validated before rendering.
+
+Read the [complete data-source contract](https://github.com/A3S-Lab/Form/blob/main/docs/data-sources.md) for compiler limits, request keys, custom widgets, and tenant-safety requirements.

@@ -3,9 +3,9 @@ import type {
   AsyncValidationRequest,
   AsyncValidationResponse,
   DataSourceRequest,
+  DataSourceResponse,
   FormHostAdapter,
   JsonValue,
-  UiOption,
 } from '../core/types';
 
 export interface A3SCloudFormContext {
@@ -21,7 +21,7 @@ export interface A3SCloudFormBindings {
     context: A3SCloudFormContext,
     request: DataSourceRequest,
     signal: AbortSignal,
-  ) => Promise<UiOption[]>;
+  ) => Promise<DataSourceResponse>;
   invokeAction?: (
     context: A3SCloudFormContext,
     request: ActionRequest,

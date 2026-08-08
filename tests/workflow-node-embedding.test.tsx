@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { DifyLikeWorkflowNode } from '../examples/dify-like-workflow-node';
-import { compileForm, createFormRef, type FormHostAdapter, type JsonObject } from '../src/core';
+import {
+  compileForm,
+  createFormRef,
+  type DataSourceRequest,
+  type FormHostAdapter,
+  type JsonObject,
+} from '../src/core';
 import type { WorkflowNodeConfiguration } from '../src/workflow';
 import { createDocument } from './fixtures';
 
@@ -124,5 +130,53 @@ describe('Dify-like workflow node embedding example', () => {
     fireEvent.click(screen.getByRole('button', { name: '提交' }));
     await waitFor(() => expect(committed?.value.name).toBe('Available node'));
     expect(scopes).toEqual(['form', 'form']);
+  });
+
+  it('loads searchable node options through the neutral host adapter', async () => {
+    const source = createDocument();
+    if (!source.dataSources) throw new Error('Expected the fixture data source.');
+    source.dataSources[0] = {
+      ...source.dataSources[0],
+      trigger: 'focus',
+      searchable: true,
+      debounceMs: 0,
+      pageSize: 1,
+    };
+    const document = compileForm(source).document;
+    if (!document) throw new Error('Expected the fixture to compile.');
+    const form = createFormRef(document, 'a3s://forms/workflow/llm', 'configuration');
+    const requests: DataSourceRequest[] = [];
+
+    render(
+      <DifyLikeWorkflowNode
+        document={document}
+        form={form}
+        nodeType="llm"
+        nodeId="llm-options"
+        value={{ name: 'Node config' }}
+        hostAdapter={{
+          resolveDataSource: async (request) => {
+            requests.push(request);
+            return [
+              request.query
+                ? { label: '成员', value: 'member' }
+                : { label: '管理员', value: 'admin' },
+            ];
+          },
+        }}
+        onChange={() => undefined}
+        onCommit={() => undefined}
+      />,
+    );
+
+    expect(requests).toHaveLength(0);
+    fireEvent.focus(screen.getByLabelText('角色'));
+    expect(await screen.findByRole('option', { name: '管理员' })).toBeTruthy();
+    expect(requests[0]).toEqual(expect.objectContaining({ limit: 1, locale: 'zh-CN' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索 角色 选项' }), {
+      target: { value: '成员' },
+    });
+    expect(await screen.findByRole('option', { name: '成员' })).toBeTruthy();
+    expect(requests.at(-1)?.query).toBe('成员');
   });
 });

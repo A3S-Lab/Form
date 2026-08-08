@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 import {
+  DataSourceCoordinator,
   evaluateComputedRules,
   evaluateFormValue,
   type FieldError,
@@ -26,6 +27,12 @@ import {
   updateFormValue,
   validateFormValueAsync,
 } from '../core';
+import {
+  DataSourceSearch,
+  DataSourceStatus,
+  type FormDataSourceState,
+  useFormDataSource,
+} from './data-source';
 import type { FormNodeRegistry } from './node-registry';
 import { SelectControl } from './select-control';
 
@@ -38,8 +45,10 @@ export interface FormWidgetProps {
   required?: boolean;
   describedBy?: string;
   options: UiOption[];
+  dataSource: FormDataSourceState;
   onChange: (value: JsonValue) => void;
   onBlur?: () => void;
+  onFocus?: () => void;
 }
 
 export type FormWidget = ComponentType<FormWidgetProps>;
@@ -77,6 +86,7 @@ function NativeWidget({
   options,
   onChange,
   onBlur,
+  onFocus,
 }: FormWidgetProps) {
   const common: InputHTMLAttributes<HTMLInputElement> = {
     id,
@@ -88,6 +98,7 @@ function NativeWidget({
     'aria-describedby': describedBy,
     placeholder: node.placeholder,
     onBlur,
+    onFocus,
   };
   switch (node.widget) {
     case 'textarea':
@@ -104,6 +115,7 @@ function NativeWidget({
           value={String(value ?? '')}
           onChange={(event) => onChange(event.target.value)}
           onBlur={onBlur}
+          onFocus={onFocus}
         />
       );
     case 'number':
@@ -147,6 +159,7 @@ function NativeWidget({
             onChange(selected?.value ?? event.target.value);
           }}
           onBlur={onBlur}
+          onFocus={onFocus}
         >
           <option value="">{node.placeholder ?? '请选择'}</option>
           {options.map((option) => (
@@ -171,6 +184,7 @@ function NativeWidget({
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onBlur?.();
           }}
+          onFocus={onFocus}
         >
           {options.map((option) => (
             <label key={`${option.label}-${String(option.value)}`}>
@@ -221,33 +235,8 @@ function isRequiredField(plan: FormPlan, node: UiNode): boolean {
   return Array.isArray(required) && required.includes(tokens.at(-1));
 }
 
-function useOptions(
-  node: UiNode,
-  plan: FormPlan,
-  value: JsonObject,
-  hostAdapter: FormHostAdapter | undefined,
-  locale: string,
-): UiOption[] {
-  const [remote, setRemote] = useState<UiOption[]>([]);
-  const source = useMemo(
-    () => plan.dataSources.find((item) => item.id === node.dataSource),
-    [node.dataSource, plan.dataSources],
-  );
-  useEffect(() => {
-    if (!source || !hostAdapter?.resolveDataSource) return;
-    const controller = new AbortController();
-    hostAdapter
-      .resolveDataSource({ definition: source, value, locale }, controller.signal)
-      .then(setRemote)
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) console.warn('A3S Form data source failed.', error);
-      });
-    return () => controller.abort();
-  }, [hostAdapter, locale, source, value]);
-  return node.options ?? remote;
-}
-
 interface NodeViewProps extends FormRendererProps {
+  dataSourceCoordinator: DataSourceCoordinator;
   nodeId: string;
   errorMap: Map<string, FieldError[]>;
   prefix: string;
@@ -279,13 +268,16 @@ function NodeView(props: NodeViewProps): ReactNode {
   const [activeLayoutChild, setActiveLayoutChild] = useState<string>();
   const state = fieldState(plan, nodeId, value);
   const validating = node.valuePath ? props.validatingPaths.has(node.valuePath) : false;
-  const options = useOptions(
+  const dataSource = useFormDataSource({
+    coordinator: props.dataSourceCoordinator,
+    hostAdapter: props.hostAdapter,
+    locale: props.locale ?? plan.metadata.locale ?? 'zh-CN',
     node,
     plan,
     value,
-    props.hostAdapter,
-    props.locale ?? plan.metadata.locale ?? 'zh-CN',
-  );
+    visible: state.visible,
+  });
+  const options = dataSource.options;
   if (!node || !state.visible) return null;
   const extension = node.widget ? nodeRegistry[node.widget] : undefined;
   if (extension) {
@@ -306,19 +298,28 @@ function NodeView(props: NodeViewProps): ReactNode {
         data-node-type={node.widget}
         data-invalid={errors.length > 0 || undefined}
         data-validating={validating || undefined}
-        aria-busy={validating || undefined}
+        aria-busy={
+          validating || dataSource.status === 'loading' || dataSource.loadingMore || undefined
+        }
         style={formItemStyle(node.width)}
       >
+        <DataSourceSearch label={node.label ?? node.id} state={dataSource} />
         <CustomNode
           id={inputId}
           node={node}
           plan={plan}
           value={current}
           formValue={value}
-          disabled={Boolean(props.readOnly || !state.enabled)}
+          disabled={Boolean(
+            props.readOnly ||
+              !state.enabled ||
+              dataSource.status === 'blocked' ||
+              dataSource.status === 'loading',
+          )}
           invalid={errors.length > 0}
           errors={errors}
           options={options}
+          dataSource={dataSource}
           onChange={(next) => {
             if (node.valuePath) onChange(updateFormValue(value, node.valuePath, next));
           }}
@@ -328,9 +329,11 @@ function NodeView(props: NodeViewProps): ReactNode {
               ? () => props.onFieldBlur(node.id, node.valuePath as string)
               : undefined
           }
+          onFocus={dataSource.activate}
         >
           {children}
         </CustomNode>
+        <DataSourceStatus label={node.label ?? node.id} state={dataSource} />
         {errors.map((error) => (
           <div className="a3s-form-error" role="alert" key={`${error.code}-${error.message}`}>
             {error.message}
@@ -565,7 +568,9 @@ function NodeView(props: NodeViewProps): ReactNode {
       className={`a3s-form-field field${errors.length ? ' is-invalid' : ''}`}
       data-invalid={errors.length > 0 || undefined}
       data-validating={validating || undefined}
-      aria-busy={validating || undefined}
+      aria-busy={
+        validating || dataSource.status === 'loading' || dataSource.loadingMore || undefined
+      }
       style={formItemStyle(node.width)}
     >
       {node.widget !== 'checkbox' && node.widget !== 'switch' && (
@@ -582,20 +587,29 @@ function NodeView(props: NodeViewProps): ReactNode {
           {node.description}
         </div>
       )}
+      <DataSourceSearch label={node.label ?? node.id} state={dataSource} />
       <Widget
         id={inputId}
         node={node}
         value={current}
-        disabled={Boolean(props.readOnly || !state.enabled)}
+        disabled={Boolean(
+          props.readOnly ||
+            !state.enabled ||
+            dataSource.status === 'blocked' ||
+            dataSource.status === 'loading',
+        )}
         invalid={errors.length > 0}
         required={required}
         describedBy={describedBy || undefined}
         options={options}
+        dataSource={dataSource}
         onChange={(next) => onChange(updateFormValue(value, node.valuePath as string, next))}
         onBlur={
           state.enabled ? () => props.onFieldBlur(node.id, node.valuePath as string) : undefined
         }
+        onFocus={dataSource.activate}
       />
+      <DataSourceStatus label={node.label ?? node.id} state={dataSource} />
       {errors.map((error, index) => (
         <div
           className="a3s-form-error"
@@ -639,6 +653,11 @@ export function FormRenderer(props: FormRendererProps) {
   const actionController = useRef<AbortController | null>(null);
   const formValidationController = useRef<AbortController | null>(null);
   const fieldValidationControllers = useRef(new Map<string, AbortController>());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Resolver identity is the cache and tenant boundary.
+  const dataSourceCoordinator = useMemo(
+    () => new DataSourceCoordinator(),
+    [props.hostAdapter?.resolveDataSource],
+  );
   const validationBoundary = useRef({
     hostAdapter: props.hostAdapter,
     plan: props.plan,
@@ -721,6 +740,8 @@ export function FormRenderer(props: FormRendererProps) {
     },
     [abortFieldValidations],
   );
+
+  useEffect(() => () => dataSourceCoordinator.clear(), [dataSourceCoordinator]);
 
   const focusError = (path: string) => {
     const node = Object.values(props.plan.nodeById).find((item) => item.valuePath === path);
@@ -874,6 +895,7 @@ export function FormRenderer(props: FormRendererProps) {
         {...props}
         value={runtimeValue}
         onChange={changeValue}
+        dataSourceCoordinator={dataSourceCoordinator}
         nodeId={props.plan.root}
         errorMap={errorMap}
         prefix={prefix}
