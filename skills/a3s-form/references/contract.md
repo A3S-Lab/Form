@@ -29,10 +29,11 @@ Built-in widget keys are `text`, `textarea`, `number`, `select`, `radio`, `check
 
 - Values: `{ "op": "literal", "value": ... }`, `{ "op": "field", "path": "profile.name" }`
 - Unary: `not`, `exists`
-- Collections: `all`, `any`
-- Binary: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`, `in`
+- Collections: `all`, `any`, `coalesce`, `concat`
+- Binary: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`, `in`, `add`, `subtract`, `multiply`, `divide`
+- Branch: `if` with `condition`, `whenTrue`, and `whenFalse`
 
-Rules use `visible`, `enabled`, `computed`, or `validate` and target a node ID. Expressions cannot execute JavaScript or import modules.
+Rules use `visible`, `enabled`, `computed`, or `validate` and target a node ID. Computed rules target value-bearing nodes, run in compiler-defined dependency order, and fail closed by removing stale dependent outputs. Expressions cannot execute JavaScript or import modules.
 
 ## Typed patch
 

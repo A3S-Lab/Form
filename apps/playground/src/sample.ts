@@ -22,6 +22,7 @@ export const sampleForm: FormDocument = {
         title: '所属部门',
         enum: ['product', 'engineering', 'design', 'operations'],
       },
+      onboardingRecord: { type: 'string', title: '入职记录' },
       employmentType: {
         type: 'string',
         title: '用工类型',
@@ -47,6 +48,7 @@ export const sampleForm: FormDocument = {
           'name',
           'email',
           'department',
+          'onboarding-record',
           'employment-type',
           'start-date',
           'equipment',
@@ -85,6 +87,15 @@ export const sampleForm: FormDocument = {
           { label: '设计', value: 'design' },
           { label: '运营', value: 'operations' },
         ],
+      },
+      {
+        id: 'onboarding-record',
+        kind: 'field',
+        label: '入职记录',
+        description: '由姓名和部门自动生成',
+        schemaPath: '/properties/onboardingRecord',
+        widget: 'text',
+        width: 12,
       },
       {
         id: 'employment-type',
@@ -128,6 +139,30 @@ export const sampleForm: FormDocument = {
     ],
   },
   rules: [
+    {
+      id: 'derive-onboarding-record',
+      target: 'onboarding-record',
+      kind: 'computed',
+      expression: {
+        op: 'if',
+        condition: {
+          op: 'all',
+          values: [
+            { op: 'exists', value: { op: 'field', path: 'name' } },
+            { op: 'exists', value: { op: 'field', path: 'department' } },
+          ],
+        },
+        whenTrue: {
+          op: 'concat',
+          values: [
+            { op: 'field', path: 'name' },
+            { op: 'literal', value: ' · ' },
+            { op: 'field', path: 'department' },
+          ],
+        },
+        whenFalse: { op: 'literal', value: '' },
+      },
+    },
     {
       id: 'contractor-equipment',
       target: 'equipment',

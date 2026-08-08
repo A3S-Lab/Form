@@ -161,7 +161,7 @@ const plan = assertCompiled(document);
 ```text
 schema          closed A3S Form Schema Profile 1 contract
 ui              nodes, layouts, widget keys, hints, and options
-rules           pure visible / enabled / validate expressions; computed is reserved for v0.2
+rules           pure visible / enabled / computed / validate expressions
 dataSources     declarative data requests resolved by the host
 actions         declarative actions resolved by the host
 metadata        title, locale, ownership, and compatibility information
@@ -172,6 +172,8 @@ digest          canonical SHA-256
 See [Architecture](docs/architecture.md) and [Security Boundaries](docs/security.md) for the complete design.
 
 The development compiler enforces [A3S Form Schema Profile 1](docs/schema-profile-1.md). Unsupported JSON Schema keywords fail with an exact path. Successful plans record `schemaProfile: "a3s.dev/form-schema-profile/1"`; `const`, `enum`, `uniqueItems`, `additionalProperties`, and the approved format set use the same semantics in headless and embedded runtimes.
+
+[Deterministic computed rules](docs/computed-rules.md) derive workflow-node parameters in a stable topological order. Arithmetic and branching stay inside the bounded expression language; failed calculations remove stale outputs and produce an inspectable trace.
 
 <a id="embedding"></a>
 
@@ -253,12 +255,12 @@ Current full runtime coverage:
 
 | Metric | Coverage |
 | --- | ---: |
-| Statements | **97.72%** |
-| Branches | **95.67%** |
-| Functions | **97.30%** |
-| Lines | **99.02%** |
+| Statements | **97.83%** |
+| Branches | **95.64%** |
+| Functions | **97.23%** |
+| Lines | **99.05%** |
 
-- All 182 unit and cross-framework integration tests pass.
+- All 197 unit and cross-framework integration tests pass.
 - The repository includes local A3S Test flows covering Designer → focused Preview → validation → action, responsive mobile authoring, browser-local persistence, and validated JSON import.
 - A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
 - CI installs locked dependencies and runs linting, type checks, coverage gates, package/CLI builds, documentation builds, and the Playground build.

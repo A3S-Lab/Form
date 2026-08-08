@@ -64,7 +64,7 @@ A3S Form 是可嵌入的 AI Native Form Designer。它把表单定义、可视�
 FormDocument
 ├── schema          封闭的 A3S Form Schema Profile 1
 ├── ui              节点、布局、widget key、提示和选项
-├── rules           visible/enabled/validate 纯表达式；computed 预留至 v0.2
+├── rules           visible/enabled/computed/validate 有界纯表达式
 ├── dataSources     宿主解析的声明式数据请求
 ├── actions         宿主解析的声明式动作
 ├── metadata        标题、语言、所有者和兼容信息

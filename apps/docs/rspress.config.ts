@@ -49,6 +49,7 @@ export default defineConfig({
         { text: 'Development baseline', link: '/next/guide/' },
         { text: 'Workflow-node embedding', link: '/next/guide/workflow-node-embedding' },
         { text: 'Schema Profile 1', link: '/next/guide/schema-profile-1' },
+        { text: 'Computed rules', link: '/next/guide/computed-rules' },
       ],
     },
     editLink: {

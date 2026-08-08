@@ -11,6 +11,8 @@ import {
   useState,
 } from 'react';
 import {
+  evaluateComputedRules,
+  evaluateFormValue,
   type FieldError,
   type FormHostAdapter,
   type FormPlan,
@@ -21,7 +23,6 @@ import {
   type UiNode,
   type UiOption,
   updateFormValue,
-  validateFormValue,
 } from '../core';
 import type { FormNodeRegistry } from './node-registry';
 import { SelectControl } from './select-control';
@@ -596,7 +597,24 @@ export function FormRenderer(props: FormRendererProps) {
   const [submittedErrors, setSubmittedErrors] = useState<FieldError[]>([]);
   const [pendingAction, setPendingAction] = useState<string>();
   const [actionError, setActionError] = useState('');
-  const errors = props.errors ?? submittedErrors;
+  const computed = useMemo(
+    () => evaluateComputedRules(props.plan, props.value),
+    [props.plan, props.value],
+  );
+  const runtimeValue = computed.value;
+  const errors = useMemo(() => {
+    const hostErrors = props.errors ?? submittedErrors;
+    return [
+      ...computed.errors,
+      ...hostErrors.filter(
+        (error) =>
+          !computed.errors.some(
+            (computedError) =>
+              computedError.path === error.path && computedError.code === error.code,
+          ),
+      ),
+    ];
+  }, [computed.errors, props.errors, submittedErrors]);
   const errorMap = useMemo(() => {
     const map = new Map<string, FieldError[]>();
     for (const error of errors) map.set(error.path, [...(map.get(error.path) ?? []), error]);
@@ -616,17 +634,19 @@ export function FormRenderer(props: FormRendererProps) {
   };
 
   const changeValue = (next: JsonObject) => {
-    props.onChange(next);
+    const evaluation = evaluateFormValue(props.plan, next);
+    props.onChange(evaluation.value);
     if (props.errors === undefined && submittedErrors.length > 0) {
-      setSubmittedErrors(validateFormValue(props.plan, next));
+      setSubmittedErrors(evaluation.errors);
     }
   };
 
   const invoke = async (actionId: string, requiresValidation: boolean) => {
     if (pendingAction) return;
     setActionError('');
+    const evaluation = evaluateFormValue(props.plan, runtimeValue);
     if (requiresValidation) {
-      const nextErrors = validateFormValue(props.plan, props.value);
+      const nextErrors = evaluation.errors;
       setSubmittedErrors(nextErrors);
       if (nextErrors.length > 0) {
         window.requestAnimationFrame(() => focusError(nextErrors[0].path));
@@ -639,10 +659,10 @@ export function FormRenderer(props: FormRendererProps) {
     const controller = new AbortController();
     actionController.current = controller;
     try {
-      if (props.onAction) await props.onAction(actionId, props.value);
+      if (props.onAction) await props.onAction(actionId, evaluation.value);
       else if (props.hostAdapter?.invokeAction) {
         await props.hostAdapter.invokeAction(
-          { definition, value: props.value, plan: props.plan },
+          { definition, value: evaluation.value, plan: props.plan },
           controller.signal,
         );
       }
@@ -675,6 +695,7 @@ export function FormRenderer(props: FormRendererProps) {
     >
       <NodeView
         {...props}
+        value={runtimeValue}
         onChange={changeValue}
         nodeId={props.plan.root}
         errorMap={errorMap}

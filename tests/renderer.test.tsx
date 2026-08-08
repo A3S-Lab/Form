@@ -56,6 +56,86 @@ describe('React FormRenderer', () => {
     await waitFor(() => expect(action).toBe('submit'));
   });
 
+  it('renders computed fields as read-only and submits the derived controlled value', async () => {
+    const document = createDocument();
+    document.schema = {
+      type: 'object',
+      properties: {
+        firstName: { type: 'string' },
+        lastName: { type: 'string' },
+        displayName: { type: 'string' },
+      },
+      required: ['firstName', 'displayName'],
+      additionalProperties: false,
+    };
+    document.ui.nodes = [
+      { id: 'root', kind: 'root', children: ['first-name', 'last-name', 'display-name'] },
+      {
+        id: 'first-name',
+        kind: 'field',
+        label: 'First name',
+        schemaPath: '/properties/firstName',
+      },
+      {
+        id: 'last-name',
+        kind: 'field',
+        label: 'Last name',
+        schemaPath: '/properties/lastName',
+      },
+      {
+        id: 'display-name',
+        kind: 'field',
+        label: 'Display name',
+        schemaPath: '/properties/displayName',
+      },
+    ];
+    document.dataSources = [];
+    document.rules = [
+      {
+        id: 'derive-display-name',
+        target: 'display-name',
+        kind: 'computed',
+        expression: {
+          op: 'concat',
+          values: [
+            { op: 'field', path: 'firstName' },
+            { op: 'literal', value: ' ' },
+            { op: 'field', path: 'lastName' },
+          ],
+        },
+      },
+    ];
+    const plan = assertCompiled(document);
+    let submitted: JsonObject | undefined;
+    function ComputedHarness() {
+      const [value, setValue] = useState<JsonObject>({ firstName: 'Ada', lastName: 'Lovelace' });
+      return (
+        <>
+          <FormRenderer
+            plan={plan}
+            value={value}
+            onChange={setValue}
+            onAction={(_actionId, next) => {
+              submitted = next;
+            }}
+          />
+          <output data-testid="computed-value">{JSON.stringify(value)}</output>
+        </>
+      );
+    }
+    render(<ComputedHarness />);
+    const displayName = screen.getByLabelText('Display name') as HTMLInputElement;
+    expect(displayName.value).toBe('Ada Lovelace');
+    expect(displayName.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Grace' } });
+    expect(screen.getByTestId('computed-value').textContent).toContain(
+      '"displayName":"Grace Lovelace"',
+    );
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    await waitFor(() => expect(submitted?.displayName).toBe('Grace Lovelace'));
+  });
+
   it('gives native controls consistent labels, required semantics and select framing', async () => {
     const document = createDocument();
     const name = document.ui.nodes.find((node) => node.id === 'name');

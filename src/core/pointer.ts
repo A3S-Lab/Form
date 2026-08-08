@@ -38,6 +38,20 @@ export function setAtPath(value: JsonObject, path: string, next: JsonValue): Jso
   return copy;
 }
 
+export function removeAtPath(value: JsonObject, path: string): JsonObject {
+  const copy = structuredClone(value);
+  const parts = path.split('.').filter(Boolean);
+  if (parts.length === 0) return {};
+  let current: Record<string, JsonValue> = copy;
+  for (const part of parts.slice(0, -1)) {
+    const child = current[part];
+    if (child === null || typeof child !== 'object' || Array.isArray(child)) return copy;
+    current = child;
+  }
+  delete current[parts.at(-1) as string];
+  return copy;
+}
+
 export function schemaPointerToValuePath(pointer: string): string | undefined {
   const parts = decodePointer(pointer);
   const output: string[] = [];

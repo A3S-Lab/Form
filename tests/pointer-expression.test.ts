@@ -1,10 +1,12 @@
 import {
+  analyzeExpression,
   decodePointer,
   evaluateExpression,
   expressionFieldPaths,
   type FormExpression,
   getAtPath,
   getAtPointer,
+  removeAtPath,
   schemaPointerToValuePath,
   setAtPath,
 } from '../src/core';
@@ -28,6 +30,14 @@ describe('JSON pointer and value path helpers', () => {
     expect(original.profile.name).toBe('old');
     expect(setAtPath({}, 'profile.name', 'new')).toEqual({ profile: { name: 'new' } });
     expect(setAtPath({}, '', { root: true })).toEqual({ root: true });
+    expect(removeAtPath({ profile: { name: 'old', role: 'admin' } }, 'profile.name')).toEqual({
+      profile: { role: 'admin' },
+    });
+    expect(removeAtPath(original, 'profile.missing')).toEqual(original);
+    expect(removeAtPath({ profile: 'not-an-object' }, 'profile.name')).toEqual({
+      profile: 'not-an-object',
+    });
+    expect(removeAtPath(original, '')).toEqual({});
     expect(schemaPointerToValuePath('/properties/profile/properties/name')).toBe('profile.name');
     expect(schemaPointerToValuePath('/items/name')).toBeUndefined();
   });
@@ -90,5 +100,119 @@ describe('bounded expressions', () => {
     expect(() =>
       evaluateExpression({ op: 'not', value: field('enabled') }, value, { maxOperations: 1 }),
     ).toThrow('operation limit');
+  });
+
+  it('evaluates bounded arithmetic, branching, concatenation and fallback expressions', () => {
+    const arithmetic = {
+      op: 'divide',
+      left: {
+        op: 'subtract',
+        left: {
+          op: 'multiply',
+          left: { op: 'add', left: field('age'), right: literal(2) },
+          right: literal(3),
+        },
+        right: literal(6),
+      },
+      right: literal(2),
+    } as FormExpression;
+    expect(evaluateExpression(arithmetic, value)).toBe(30);
+    expect(
+      evaluateExpression(
+        {
+          op: 'if',
+          condition: binary('gte', field('age'), literal(18)),
+          whenTrue: {
+            op: 'concat',
+            values: [literal('role:'), field('role')],
+          },
+          whenFalse: literal('minor'),
+        } as FormExpression,
+        value,
+      ),
+    ).toBe('role:admin');
+    expect(
+      evaluateExpression(
+        {
+          op: 'coalesce',
+          values: [field('missing'), literal(null), field('role')],
+        } as FormExpression,
+        value,
+      ),
+    ).toBe('admin');
+  });
+
+  it('uses structural equality and reports deterministic expression failures', () => {
+    expect(
+      evaluateExpression(binary('eq', literal({ a: 1, b: 2 }), literal({ b: 2, a: 1 })), value),
+    ).toBe(true);
+    expect(
+      evaluateExpression(binary('contains', literal([{ id: 1 }]), literal({ id: 1 })), value),
+    ).toBe(true);
+    expect(() =>
+      evaluateExpression(
+        { op: 'divide', left: literal(1), right: literal(0) } as FormExpression,
+        value,
+      ),
+    ).toThrow('divide by zero');
+    expect(() =>
+      evaluateExpression(
+        { op: 'multiply', left: literal('2'), right: literal(2) } as FormExpression,
+        value,
+      ),
+    ).toThrow('finite numbers');
+    expect(() =>
+      evaluateExpression(
+        {
+          op: 'multiply',
+          left: literal(Number.MAX_VALUE),
+          right: literal(Number.MAX_VALUE),
+        } as FormExpression,
+        value,
+      ),
+    ).toThrow('result must be a finite number');
+    expect(() =>
+      evaluateExpression(
+        { op: 'concat', values: [literal({ sensitive: false })] } as FormExpression,
+        value,
+      ),
+    ).toThrow('JSON primitives');
+    expect(
+      evaluateExpression(
+        { op: 'coalesce', values: [field('missing'), literal(null)] } as FormExpression,
+        value,
+      ),
+    ).toBeUndefined();
+    expect(
+      evaluateExpression(
+        {
+          op: 'if',
+          condition: literal(false),
+          whenTrue: literal('yes'),
+          whenFalse: literal('no'),
+        } as FormExpression,
+        value,
+      ),
+    ).toBe('no');
+  });
+
+  it('analyzes only closed expression shapes', () => {
+    const expression = {
+      op: 'if',
+      condition: field('enabled'),
+      whenTrue: { op: 'concat', values: [field('role'), literal('!')] },
+      whenFalse: literal('disabled'),
+    } as FormExpression;
+    expect(analyzeExpression(expression)).toEqual({
+      size: 6,
+      fieldPaths: ['enabled', 'role'],
+    });
+    expect(() => analyzeExpression({ op: 'field', path: '' })).toThrow('field path');
+    expect(() => analyzeExpression({ op: 'unknown' })).toThrow('operator');
+    expect(() => analyzeExpression({ op: 'literal' })).toThrow('literal');
+    expect(() => analyzeExpression({ op: 'all', values: 'invalid' })).toThrow('values');
+    expect(() =>
+      analyzeExpression({ op: 'not', value: { op: 'literal', value: true }, extra: true }),
+    ).toThrow('unexpected');
   });
 });

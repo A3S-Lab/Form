@@ -1,5 +1,5 @@
 import { digestDocument, sealDocument } from './canonical';
-import { expressionFieldPaths } from './expression';
+import { analyzeExpression } from './expression';
 import { getAtPointer, schemaPointerToValuePath } from './pointer';
 import { A3S_FORM_SCHEMA_PROFILE_1_ID, inspectSchemaProfile } from './schema-profile';
 import type {
@@ -9,9 +9,9 @@ import type {
   CompilerLimits,
   FormDiagnostic,
   FormDocument,
-  FormExpression,
   FormPlan,
   FormRule,
+  JsonSchema,
   UiNode,
 } from './types';
 
@@ -51,16 +51,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function expressionSize(expression: FormExpression): number {
-  if (expression.op === 'literal' || expression.op === 'field') return 1;
-  if (expression.op === 'not' || expression.op === 'exists')
-    return 1 + expressionSize(expression.value);
-  if ('values' in expression) {
-    return 1 + expression.values.reduce((total, item) => total + expressionSize(item), 0);
-  }
-  return 1 + expressionSize(expression.left) + expressionSize(expression.right);
-}
-
 function normalize(document: FormDocument): FormDocument {
   const normalized = structuredClone(document);
   normalized.metadata.locale ??= 'zh-CN';
@@ -74,6 +64,16 @@ function normalize(document: FormDocument): FormDocument {
     node.width ??= 12;
   }
   return sealDocument(normalized);
+}
+
+function schemaHasValuePath(schema: JsonSchema, path: string): boolean {
+  let current: JsonSchema = schema;
+  for (const segment of path.split('.')) {
+    const child = current.properties?.[segment];
+    if (!child) return false;
+    current = child;
+  }
+  return true;
 }
 
 function deepFreeze<T>(value: T): T {
@@ -122,47 +122,58 @@ function inspectStructure(input: unknown, diagnostics: FormDiagnostic[]): input 
   return !diagnostics.some((item) => item.severity === 'error');
 }
 
-function ruleDependencyOrder(
+function computedDependencyOrder(
   rules: FormRule[],
   nodes: Map<string, CompiledNode>,
   diagnostics: FormDiagnostic[],
 ): string[] {
-  const byPath = new Map<string, string>();
-  for (const node of nodes.values()) if (node.valuePath) byPath.set(node.valuePath, node.id);
+  const computedRules = rules.filter((rule) => rule.kind === 'computed');
+  const computedTargets = new Map(computedRules.map((rule) => [rule.target, rule]));
+  const targetByPath = new Map<string, string>();
+  for (const target of computedTargets.keys()) {
+    const node = nodes.get(target);
+    if (node?.valuePath) targetByPath.set(node.valuePath, target);
+  }
   const graph = new Map<string, Set<string>>();
-  for (const rule of rules) {
-    graph.set(rule.target, graph.get(rule.target) ?? new Set());
-    for (const path of expressionFieldPaths(rule.expression)) {
-      const dependency = byPath.get(path);
-      if (dependency && dependency !== rule.target) graph.get(rule.target)?.add(dependency);
+  for (const rule of computedRules) {
+    const dependencies = graph.get(rule.target) ?? new Set<string>();
+    graph.set(rule.target, dependencies);
+    for (const path of analyzeExpression(rule.expression).fieldPaths) {
+      const dependency = targetByPath.get(path);
+      if (dependency) dependencies.add(dependency);
     }
   }
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
+  const state = new Map<string, 'visiting' | 'visited'>();
+  const stack: string[] = [];
   const order: string[] = [];
   let cycle = false;
   const visit = (id: string): void => {
-    if (visited.has(id)) return;
-    if (visiting.has(id)) {
+    if (state.get(id) === 'visited') return;
+    if (state.get(id) === 'visiting') {
+      if (!cycle) {
+        const start = stack.indexOf(id);
+        const path = [...stack.slice(start), id];
+        diagnostics.push(
+          diagnostic(
+            'rules.cycle',
+            `Computed rule dependency cycle: ${path.join(' -> ')}.`,
+            '/rules',
+            'error',
+            'Remove the circular computed dependency.',
+          ),
+        );
+      }
       cycle = true;
-      diagnostics.push(
-        diagnostic(
-          'rules.cycle',
-          `规则依赖形成环：${id}。`,
-          `/rules`,
-          'error',
-          '移除循环计算或可见性依赖。',
-        ),
-      );
       return;
     }
-    visiting.add(id);
-    for (const dependency of graph.get(id) ?? []) visit(dependency);
-    visiting.delete(id);
-    visited.add(id);
+    state.set(id, 'visiting');
+    stack.push(id);
+    for (const dependency of [...(graph.get(id) ?? [])].sort()) visit(dependency);
+    stack.pop();
+    state.set(id, 'visited');
     order.push(id);
   };
-  for (const id of graph.keys()) visit(id);
+  for (const id of [...graph.keys()].sort()) visit(id);
   return cycle ? [] : order;
 }
 
@@ -355,12 +366,15 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
       diagnostic('limits.rules', `规则数量超过 ${limits.maxRules} 个限制。`, '/rules'),
     );
   const ruleIds = new Set<string>();
+  const computedTargets = new Set<string>();
   const validRules: FormRule[] = [];
   for (const [index, rule] of rules.entries()) {
     if (
       !isRecord(rule) ||
       typeof rule.id !== 'string' ||
+      rule.id.trim().length === 0 ||
       typeof rule.target !== 'string' ||
+      rule.target.trim().length === 0 ||
       !isRecord(rule.expression)
     ) {
       diagnostics.push(diagnostic('rule.definition', '规则定义无效。', `/rules/${index}`));
@@ -371,12 +385,52 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
         diagnostic('rule.duplicate', `规则 ID ${rule.id} 重复。`, `/rules/${index}/id`),
       );
     ruleIds.add(rule.id);
-    if (!nodes.has(rule.target))
+    if (!['visible', 'enabled', 'computed', 'validate'].includes(rule.kind)) {
+      diagnostics.push(
+        diagnostic('rule.kind', `Rule ${rule.id} has an unsupported kind.`, `/rules/${index}/kind`),
+      );
+      continue;
+    }
+    const targetNode = nodes.get(rule.target);
+    if (!targetNode)
       diagnostics.push(
         diagnostic('rule.target', `规则目标 ${rule.target} 不存在。`, `/rules/${index}/target`),
       );
+    if (rule.kind === 'computed') {
+      if (!targetNode?.valuePath) {
+        diagnostics.push(
+          diagnostic(
+            'rules.computed_target',
+            `Computed rule ${rule.id} must target a value-bearing field or repeater.`,
+            `/rules/${index}/target`,
+          ),
+        );
+      }
+      if (computedTargets.has(rule.target)) {
+        diagnostics.push(
+          diagnostic(
+            'rules.computed_target_duplicate',
+            `Only one computed rule may target ${rule.target}.`,
+            `/rules/${index}/target`,
+          ),
+        );
+      }
+      computedTargets.add(rule.target);
+    }
     try {
-      if (expressionSize(rule.expression) > limits.maxExpressionOperations) {
+      const analysis = analyzeExpression(rule.expression);
+      for (const fieldPath of analysis.fieldPaths) {
+        if (!schemaHasValuePath(document.schema, fieldPath)) {
+          diagnostics.push(
+            diagnostic(
+              'rule.field_reference',
+              `Rule ${rule.id} references undeclared field ${fieldPath}.`,
+              `/rules/${index}/expression`,
+            ),
+          );
+        }
+      }
+      if (analysis.size > limits.maxExpressionOperations) {
         diagnostics.push(
           diagnostic(
             'limits.expression',
@@ -396,7 +450,7 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
       );
     }
   }
-  const dependencyOrder = ruleDependencyOrder(validRules, nodes, diagnostics);
+  const dependencyOrder = computedDependencyOrder(validRules, nodes, diagnostics);
   if (diagnostics.some((item) => item.severity === 'error')) return { ok: false, diagnostics };
 
   const normalized = normalize(document);
@@ -421,6 +475,7 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
     nodes: normalizedNodes,
     nodeById,
     rules: normalized.rules ?? [],
+    expressionOperationLimit: limits.maxExpressionOperations,
     dependencyOrder,
     dataSources: normalized.dataSources ?? [],
     actions: normalized.actions ?? [],

@@ -1,5 +1,5 @@
 import { compileForm } from '../core/compiler';
-import { validateFormValue } from '../core/state';
+import { evaluateFormValue } from '../core/state';
 import type {
   CompileOptions,
   FieldError,
@@ -171,9 +171,9 @@ export function validateWorkflowNodeConfiguration(
     };
   }
 
-  const errors = validateFormValue(verification.plan, descriptor.value);
-  if (errors.length > 0) {
-    return { ok: false, errors, digest: verification.digest };
+  const evaluation = evaluateFormValue(verification.plan, descriptor.value);
+  if (evaluation.errors.length > 0) {
+    return { ok: false, errors: evaluation.errors, digest: verification.digest };
   }
 
   return {
@@ -181,7 +181,7 @@ export function validateWorkflowNodeConfiguration(
     document: verification.document,
     plan: verification.plan,
     digest: verification.digest,
-    value: structuredClone(descriptor.value),
+    value: evaluation.value,
   };
 }
 
@@ -215,14 +215,14 @@ export function validateInteractionSubmission(
       errors: [{ path: '', code: verification.code, message: verification.message }],
     };
   }
-  const errors = validateFormValue(verification.plan, submission.value);
-  return errors.length > 0
-    ? { ok: false, errors, digest: verification.digest }
+  const evaluation = evaluateFormValue(verification.plan, submission.value);
+  return evaluation.errors.length > 0
+    ? { ok: false, errors: evaluation.errors, digest: verification.digest }
     : {
         ok: true,
         errors: [],
         digest: verification.digest,
-        value: structuredClone(submission.value),
+        value: evaluation.value,
       };
 }
 

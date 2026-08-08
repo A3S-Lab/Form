@@ -1,0 +1,24 @@
+# Deterministic computed rules
+
+The `next` runtime evaluates computed node parameters before validation and host actions. It does not execute document-provided JavaScript.
+
+```json
+{
+  "id": "derive-total",
+  "target": "total",
+  "kind": "computed",
+  "expression": {
+    "op": "add",
+    "left": { "op": "field", "path": "subtotal" },
+    "right": { "op": "field", "path": "tax" }
+  }
+}
+```
+
+The compiler rejects duplicate targets, non-value targets, undeclared field paths, and dependency cycles. Successful plans carry a stable topological order and the expression operation limit used during compilation.
+
+`evaluateComputedRules` returns an immutable derived value, stable errors, and trace entries with `set`, `removed`, `unchanged`, `error`, or `skipped` status. A failed rule and all dependent outputs are removed so stale node configuration cannot be committed.
+
+React, Vue, and Web Components render computed targets as read-only controls. Digest-pinned workflow validation returns the derived value to the host.
+
+Read the [complete computed-rule contract](https://github.com/A3S-Lab/Form/blob/main/docs/computed-rules.md) for supported operations, trace privacy, and failure semantics.

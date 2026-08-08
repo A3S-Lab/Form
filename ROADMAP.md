@@ -55,7 +55,8 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 
 - Host-neutral workflow-node configuration, digest-pinned validation, controlled adapter parity, scoped CSS, and package budgets are implemented and covered by the Dify-like reference host.
 - A3S Form Schema Profile 1 is enforced recursively. Unsupported keywords fail compilation; `const`, structural `enum`, `uniqueItems`, `additionalProperties`, and nine approved formats have runtime coverage.
-- Remaining v0.2 work starts with deterministic computed rules, then async validation, data-source orchestration, subscriptions, locale catalogs, and performance gates.
+- Computed fields use a stable topological order, bounded arithmetic and branching, stale-output removal, dependency failure propagation, and an opt-in value trace.
+- Remaining v0.2 work starts with async validation, then data-source orchestration, subscriptions, locale catalogs, and performance gates.
 
 ### Planned capabilities
 
@@ -63,7 +64,7 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 - Publish a host-neutral workflow-node configuration contract for Dify-like settings panels, including node identity, a configuration-mode `FormRef`, controlled values, locale/read-only context, and digest-pinned validation.
 - Remove host-global CSS resets, enforce stylesheet size budgets, and keep A3S UI-compatible tokens scoped to Designer and Renderer roots.
 - Align host-facing value, action, error, locale, read-only, adapter, widget, and node-registry capabilities across React, Vue, and Web Components.
-- Complete the rule runtime for `visible`, `enabled`, `computed`, and `validate`, including deterministic dependency evaluation, cycle diagnostics, and an inspectable execution trace.
+- Stabilize the complete `visible`, `enabled`, `computed`, and `validate` rule runtime for release, including deterministic dependency evaluation, cycle diagnostics, and an inspectable execution trace.
 - Add cancellable field-level and form-level asynchronous validation with stable server-error mapping.
 - Implement data-source dependencies and triggers, `cacheTtlMs`, request deduplication, debounce, cancellation, search, pagination, and loading/empty/error/retry states.
 - Introduce field-level subscriptions and incremental rule evaluation so unrelated edits do not rerender or refetch unrelated nodes.

@@ -8,6 +8,7 @@ The current development baseline includes:
 - workflow-node configuration has a host-neutral, digest-pinned contract and a tested Dify-like React host;
 - Vue and Web Components forward host errors, locale, read-only state, adapters, and extension registries;
 - every successful plan records Schema Profile 1, unsupported keywords fail with exact paths, and implemented constraints have structural runtime semantics;
+- computed fields use a stable dependency order, bounded calculations, stale-output removal, and an inspectable execution trace;
 - existing `a3s-form-*` selectors and controlled interfaces remain compatible.
 
-Read the [workflow-node embedding guide](/next/guide/workflow-node-embedding) for host ownership boundaries and [Schema Profile 1](/next/guide/schema-profile-1) for the accepted validation contract. These changes remain in `next` and do not create a new compatibility commitment until released.
+Read the [workflow-node embedding guide](/next/guide/workflow-node-embedding) for host ownership boundaries, [Schema Profile 1](/next/guide/schema-profile-1) for the accepted validation contract, and [computed rules](/next/guide/computed-rules) for derived node parameters. These changes remain in `next` and do not create a new compatibility commitment until released.

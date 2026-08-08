@@ -82,8 +82,27 @@ export type FormExpression =
   | { op: 'field'; path: string }
   | { op: 'not'; value: FormExpression }
   | { op: 'all' | 'any'; values: FormExpression[] }
+  | { op: 'coalesce' | 'concat'; values: FormExpression[] }
   | {
-      op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'in';
+      op: 'if';
+      condition: FormExpression;
+      whenTrue: FormExpression;
+      whenFalse: FormExpression;
+    }
+  | {
+      op:
+        | 'eq'
+        | 'ne'
+        | 'gt'
+        | 'gte'
+        | 'lt'
+        | 'lte'
+        | 'contains'
+        | 'in'
+        | 'add'
+        | 'subtract'
+        | 'multiply'
+        | 'divide';
       left: FormExpression;
       right: FormExpression;
     }
@@ -186,6 +205,7 @@ export interface FormPlan {
   nodes: CompiledNode[];
   nodeById: Readonly<Record<string, CompiledNode>>;
   rules: FormRule[];
+  expressionOperationLimit: number;
   dependencyOrder: string[];
   dataSources: DataSourceDefinition[];
   actions: ActionDefinition[];
@@ -249,6 +269,31 @@ export interface FieldError {
   code: string;
   message: string;
 }
+
+export type ComputedRuleTraceStatus = 'set' | 'removed' | 'unchanged' | 'error' | 'skipped';
+
+export interface ComputedRuleTraceEntry {
+  ruleId: string;
+  target: string;
+  path: string;
+  dependencies: string[];
+  status: ComputedRuleTraceStatus;
+  previousValue?: JsonValue;
+  nextValue?: JsonValue;
+  error?: string;
+}
+
+export interface ComputedRuleEvaluationOptions {
+  includeValues?: boolean;
+}
+
+export interface ComputedRuleEvaluation {
+  value: JsonObject;
+  trace: ComputedRuleTraceEntry[];
+  errors: FieldError[];
+}
+
+export type FormValueEvaluation = ComputedRuleEvaluation;
 
 export interface DataSourceRequest {
   definition: DataSourceDefinition;

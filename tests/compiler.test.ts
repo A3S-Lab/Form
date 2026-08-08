@@ -23,7 +23,7 @@ describe('form compiler', () => {
     expect(result.plan?.sourceDigest).toBe(result.document?.digest);
     expect(result.plan?.nodeById.name.valuePath).toBe('name');
     expect(result.plan?.nodeById.root.children).toEqual(['name', 'age', 'active', 'role']);
-    expect(result.plan?.dependencyOrder).toContain('age');
+    expect(result.plan?.dependencyOrder).toEqual([]);
     expect(Object.isFrozen(result.plan)).toBe(true);
     expect(Object.isFrozen(result.plan?.nodes)).toBe(true);
     expect(source.digest).toBeUndefined();

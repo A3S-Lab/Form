@@ -73,6 +73,7 @@ describe('headless form state', () => {
 
   it('validates arrays and nested objects', () => {
     const document = createDocument();
+    document.rules = [];
     document.schema = {
       type: 'object',
       required: ['profile'],
@@ -105,6 +106,14 @@ describe('headless form state', () => {
     expect(
       validateFormValue(plan, { profile: { city: '上海' }, tags: ['1', 2] as never }),
     ).toContainEqual(expect.objectContaining({ path: 'tags.1', code: 'type' }));
+
+    const unconstrainedItems = structuredClone(plan);
+    if (unconstrainedItems.schema.properties?.tags) {
+      delete unconstrainedItems.schema.properties.tags.items;
+    }
+    expect(
+      validateFormValue(unconstrainedItems, { profile: { city: '上海' }, tags: ['one', 2] }),
+    ).toEqual([]);
   });
 
   it('accepts null and valid primitive values without false positives', () => {
