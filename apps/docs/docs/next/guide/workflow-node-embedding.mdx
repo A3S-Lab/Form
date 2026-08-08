@@ -17,6 +17,8 @@ const form = {
 
 `revision` and `digest` prevent a later form release from changing an existing node silently.
 
+The resolved plan also carries `schemaProfile: "a3s.dev/form-schema-profile/1"`. A host that does not support that profile must fail closed before rendering the node settings.
+
 ## Keep the value controlled
 
 ```tsx

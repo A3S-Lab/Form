@@ -47,6 +47,8 @@ export default defineConfig({
         { text: 'Development preview', link: '/next/' },
         { text: 'Product roadmap', link: '/next/roadmap' },
         { text: 'Development baseline', link: '/next/guide/' },
+        { text: 'Workflow-node embedding', link: '/next/guide/workflow-node-embedding' },
+        { text: 'Schema Profile 1', link: '/next/guide/schema-profile-1' },
       ],
     },
     editLink: {

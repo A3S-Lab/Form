@@ -51,9 +51,15 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 
 **Outcome:** every accepted contract feature behaves consistently in the compiler, browser runtime, Worker, CLI, and server-side validation.
 
+### Current development baseline (unreleased)
+
+- Host-neutral workflow-node configuration, digest-pinned validation, controlled adapter parity, scoped CSS, and package budgets are implemented and covered by the Dify-like reference host.
+- A3S Form Schema Profile 1 is enforced recursively. Unsupported keywords fail compilation; `const`, structural `enum`, `uniqueItems`, `additionalProperties`, and nine approved formats have runtime coverage.
+- Remaining v0.2 work starts with deterministic computed rules, then async validation, data-source orchestration, subscriptions, locale catalogs, and performance gates.
+
 ### Planned capabilities
 
-- Publish **A3S Form Schema Profile 1** with an explicit keyword allowlist, canonical semantics, conformance fixtures, and diagnostics for every unsupported keyword.
+- Stabilize and publish **A3S Form Schema Profile 1** with its explicit keyword allowlist, canonical semantics, conformance fixtures, and diagnostics for every unsupported keyword.
 - Publish a host-neutral workflow-node configuration contract for Dify-like settings panels, including node identity, a configuration-mode `FormRef`, controlled values, locale/read-only context, and digest-pinned validation.
 - Remove host-global CSS resets, enforce stylesheet size budgets, and keep A3S UI-compatible tokens scoped to Designer and Renderer roots.
 - Align host-facing value, action, error, locale, read-only, adapter, widget, and node-registry capabilities across React, Vue, and Web Components.

@@ -82,6 +82,8 @@ The embedding host owns:
 
 A3S Form owns compilation, synchronous validation, field state, accessible rendering, adapter events, and the immutable plan derived from the pinned document.
 
+Every accepted plan identifies `a3s.dev/form-schema-profile/1`. A workflow host should treat a different `schemaProfile` as an unsupported contract instead of attempting to render it. See [Schema Profile 1](schema-profile-1.md) for the keyword and format boundary.
+
 ## Framework surfaces
 
 React is the reference runtime. Vue and Web Components expose the same host-facing configuration where it applies: controlled values, actions, external errors, locale, read-only state, host adapters, widget registries, and custom-node registries. The Designer adapters also accept compiler capabilities.

@@ -1,5 +1,6 @@
 import { evaluateExpression } from './expression';
 import { getAtPath, setAtPath } from './pointer';
+import { isSchemaFormatValid, jsonValuesEqual } from './schema-profile';
 import type { FieldError, FormPlan, JsonObject, JsonSchema, JsonValue } from './types';
 
 function validateSchema(
@@ -22,9 +23,10 @@ function validateSchema(
     return;
   }
   if (typeof value === 'string') {
-    if (schema.minLength !== undefined && value.length < schema.minLength)
+    const length = [...value].length;
+    if (schema.minLength !== undefined && length < schema.minLength)
       errors.push({ path, code: 'minLength', message: `至少输入 ${schema.minLength} 个字符。` });
-    if (schema.maxLength !== undefined && value.length > schema.maxLength)
+    if (schema.maxLength !== undefined && length > schema.maxLength)
       errors.push({ path, code: 'maxLength', message: `最多输入 ${schema.maxLength} 个字符。` });
     if (schema.pattern) {
       try {
@@ -34,8 +36,12 @@ function validateSchema(
         errors.push({ path, code: 'pattern.invalid', message: 'Schema 中的正则表达式无效。' });
       }
     }
-    if (schema.format === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
-      errors.push({ path, code: 'format.email', message: '请输入有效的电子邮箱。' });
+    if (schema.format && !isSchemaFormatValid(schema.format, value))
+      errors.push({
+        path,
+        code: `format.${schema.format}`,
+        message: `The value must match the ${schema.format} format.`,
+      });
   }
   if (typeof value === 'number') {
     if (schema.minimum !== undefined && value < schema.minimum)
@@ -43,19 +49,28 @@ function validateSchema(
     if (schema.maximum !== undefined && value > schema.maximum)
       errors.push({ path, code: 'maximum', message: `数值不能大于 ${schema.maximum}。` });
   }
-  if (schema.enum && !schema.enum.some((item) => Object.is(item, value)))
+  if (schema.const !== undefined && !jsonValuesEqual(schema.const, value))
+    errors.push({ path, code: 'const', message: 'The value must match the required constant.' });
+  if (schema.enum && !schema.enum.some((item) => jsonValuesEqual(item, value)))
     errors.push({ path, code: 'enum', message: '请选择允许的选项。' });
   if (Array.isArray(value)) {
     if (schema.minItems !== undefined && value.length < schema.minItems)
       errors.push({ path, code: 'minItems', message: `至少需要 ${schema.minItems} 项。` });
     if (schema.maxItems !== undefined && value.length > schema.maxItems)
       errors.push({ path, code: 'maxItems', message: `最多允许 ${schema.maxItems} 项。` });
+    if (
+      schema.uniqueItems &&
+      value.some((item, index) =>
+        value.slice(0, index).some((previous) => jsonValuesEqual(previous, item)),
+      )
+    )
+      errors.push({ path, code: 'uniqueItems', message: 'Array items must be unique.' });
     if (schema.items)
       value.forEach((item, index) => {
         validateSchema(schema.items as JsonSchema, item, `${path}.${index}`, errors);
       });
   }
-  if (schema.type === 'object' && value && typeof value === 'object' && !Array.isArray(value)) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
     const object = value as Record<string, unknown>;
     for (const required of schema.required ?? []) {
       if (object[required] === undefined || object[required] === null || object[required] === '')
@@ -67,6 +82,19 @@ function validateSchema(
     }
     for (const [key, child] of Object.entries(schema.properties ?? {}))
       validateSchema(child, object[key], path ? `${path}.${key}` : key, errors);
+    for (const [key, childValue] of Object.entries(object)) {
+      if (key in (schema.properties ?? {})) continue;
+      const childPath = path ? `${path}.${key}` : key;
+      if (schema.additionalProperties === false) {
+        errors.push({
+          path: childPath,
+          code: 'additionalProperties',
+          message: 'Additional properties are not allowed.',
+        });
+      } else if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+        validateSchema(schema.additionalProperties, childValue, childPath, errors);
+      }
+    }
   }
 }
 

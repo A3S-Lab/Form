@@ -1,0 +1,28 @@
+# Schema Profile 1
+
+The `next` compiler now enforces `a3s.dev/form-schema-profile/1`. It is a closed JSON Schema 2020-12 subset: supported behavior is consistent across the headless runtime, browser adapters, compiler Worker, CLI, and digest-pinned workflow-node validation; everything else fails compilation.
+
+## Contract
+
+| Area | Accepted behavior |
+| --- | --- |
+| Core | `$schema`, `$id`, `type`, `title`, `description`, `default`, `enum`, and `const` |
+| Objects | `properties`, `required`, and boolean or schema-valued `additionalProperties` |
+| Arrays | `items`, `minItems`, `maxItems`, and structural `uniqueItems` |
+| Strings | `minLength`, `maxLength`, Unicode `pattern`, and approved `format` values |
+| Numbers | `minimum` and `maximum` |
+
+Approved formats are `email`, `uri`, `date`, `date-time`, `time`, `hostname`, `ipv4`, `ipv6`, and `uuid`.
+
+`$ref`, schema combinators, conditional schemas, tuple schemas, and unevaluated-property keywords are not accepted in Profile 1. The compiler reports `schema.keyword.unsupported` with the exact JSON Pointer instead of ignoring the keyword.
+
+Each successful `FormPlan` includes:
+
+```json
+{
+  "apiVersion": "a3s.dev/form-plan/v1alpha1",
+  "schemaProfile": "a3s.dev/form-schema-profile/1"
+}
+```
+
+Read the [complete Profile 1 specification](https://github.com/A3S-Lab/Form/blob/main/docs/schema-profile-1.md) for value semantics, exclusions, and an example contract.

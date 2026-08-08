@@ -1,6 +1,7 @@
 import { digestDocument, sealDocument } from './canonical';
 import { expressionFieldPaths } from './expression';
 import { getAtPointer, schemaPointerToValuePath } from './pointer';
+import { A3S_FORM_SCHEMA_PROFILE_1_ID, inspectSchemaProfile } from './schema-profile';
 import type {
   CompiledNode,
   CompileOptions,
@@ -176,11 +177,7 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
       diagnostic('limits.document_size', `文档超过 ${limits.maxSerializedBytes} 字节限制。`, ''),
     );
   }
-  if (document.schema.$schema && !document.schema.$schema.includes('2020-12')) {
-    diagnostics.push(
-      diagnostic('schema.dialect', '仅支持 JSON Schema 2020-12 方言。', '/schema/$schema'),
-    );
-  }
+  diagnostics.push(...inspectSchemaProfile(document.schema));
   if (options.requireDigest && !document.digest) {
     diagnostics.push(diagnostic('digest.required', '发布态表单必须包含 digest。', '/digest'));
   }
@@ -415,6 +412,7 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
   const nodeById = Object.fromEntries(normalizedNodes.map((node) => [node.id, node]));
   const plan: FormPlan = {
     apiVersion: 'a3s.dev/form-plan/v1alpha1',
+    schemaProfile: A3S_FORM_SCHEMA_PROFILE_1_ID,
     sourceRevision: normalized.revision,
     sourceDigest: normalized.digest as string,
     metadata: normalized.metadata,

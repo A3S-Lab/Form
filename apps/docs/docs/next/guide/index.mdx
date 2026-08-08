@@ -7,6 +7,7 @@ The current development baseline includes:
 - `@a3s-lab/form/styles.css` keeps the A3S UI-compatible token layer inside Form roots and ships no global preflight;
 - workflow-node configuration has a host-neutral, digest-pinned contract and a tested Dify-like React host;
 - Vue and Web Components forward host errors, locale, read-only state, adapters, and extension registries;
+- every successful plan records Schema Profile 1, unsupported keywords fail with exact paths, and implemented constraints have structural runtime semantics;
 - existing `a3s-form-*` selectors and controlled interfaces remain compatible.
 
-Read the [workflow-node embedding guide](/next/guide/workflow-node-embedding) for the contract and ownership boundaries. These changes remain in `next` and do not create a new compatibility commitment until released.
+Read the [workflow-node embedding guide](/next/guide/workflow-node-embedding) for host ownership boundaries and [Schema Profile 1](/next/guide/schema-profile-1) for the accepted validation contract. These changes remain in `next` and do not create a new compatibility commitment until released.

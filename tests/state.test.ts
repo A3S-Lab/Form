@@ -52,15 +52,22 @@ describe('headless form state', () => {
     document.schema.properties = {
       ...document.schema.properties,
       name: { type: 'string', minLength: 2, maxLength: 3, pattern: '^[A-Z]+$', format: 'email' },
-      broken: { type: 'string', pattern: '[' },
     };
     document.schema.required = ['name'];
-    const result = validateFormValue(planFor(document), { name: 'toolong', broken: 'x' });
+    const plan = planFor(document);
+    const result = validateFormValue(plan, { name: 'toolong' });
     expect(result.map((item) => item.code)).toEqual(
-      expect.arrayContaining(['maxLength', 'pattern', 'format.email', 'pattern.invalid']),
+      expect.arrayContaining(['maxLength', 'pattern', 'format.email']),
     );
-    expect(validateFormValue(planFor(document), { name: 'A' }).map((item) => item.code)).toContain(
-      'minLength',
+    expect(validateFormValue(plan, { name: 'A' }).map((item) => item.code)).toContain('minLength');
+
+    const defensivePlan = structuredClone(plan);
+    defensivePlan.schema.properties = {
+      ...defensivePlan.schema.properties,
+      broken: { type: 'string', pattern: '[' },
+    };
+    expect(validateFormValue(defensivePlan, { name: 'A@b.co', broken: 'x' })).toContainEqual(
+      expect.objectContaining({ path: 'broken', code: 'pattern.invalid' }),
     );
   });
 

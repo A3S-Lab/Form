@@ -177,6 +177,7 @@ export interface CompiledNode extends UiNode {
 
 export interface FormPlan {
   apiVersion: 'a3s.dev/form-plan/v1alpha1';
+  schemaProfile: 'a3s.dev/form-schema-profile/1';
   sourceRevision: number;
   sourceDigest: string;
   metadata: FormMetadata;

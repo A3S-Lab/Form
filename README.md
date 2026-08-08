@@ -159,7 +159,7 @@ const plan = assertCompiled(document);
 `FormDocument` contains:
 
 ```text
-schema          supported JSON Schema 2020-12 subset
+schema          closed A3S Form Schema Profile 1 contract
 ui              nodes, layouts, widget keys, hints, and options
 rules           pure visible / enabled / validate expressions; computed is reserved for v0.2
 dataSources     declarative data requests resolved by the host
@@ -170,6 +170,8 @@ digest          canonical SHA-256
 ```
 
 See [Architecture](docs/architecture.md) and [Security Boundaries](docs/security.md) for the complete design.
+
+The development compiler enforces [A3S Form Schema Profile 1](docs/schema-profile-1.md). Unsupported JSON Schema keywords fail with an exact path. Successful plans record `schemaProfile: "a3s.dev/form-schema-profile/1"`; `const`, `enum`, `uniqueItems`, `additionalProperties`, and the approved format set use the same semantics in headless and embedded runtimes.
 
 <a id="embedding"></a>
 
@@ -251,12 +253,12 @@ Current full runtime coverage:
 
 | Metric | Coverage |
 | --- | ---: |
-| Statements | **97.54%** |
-| Branches | **95.13%** |
-| Functions | **97.16%** |
-| Lines | **98.93%** |
+| Statements | **97.72%** |
+| Branches | **95.67%** |
+| Functions | **97.30%** |
+| Lines | **99.02%** |
 
-- All 137 unit and cross-framework integration tests pass.
+- All 182 unit and cross-framework integration tests pass.
 - The repository includes local A3S Test flows covering Designer → focused Preview → validation → action, responsive mobile authoring, browser-local persistence, and validated JSON import.
 - A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
 - CI installs locked dependencies and runs linting, type checks, coverage gates, package/CLI builds, documentation builds, and the Playground build.

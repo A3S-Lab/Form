@@ -3,6 +3,7 @@ export * from './core/compiler';
 export * from './core/expression';
 export * from './core/patch';
 export * from './core/pointer';
+export * from './core/schema-profile';
 export * from './core/state';
 export * from './core/template';
 export * from './core/types';
