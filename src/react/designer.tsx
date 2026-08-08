@@ -14,7 +14,6 @@ import {
   type FormPatch,
   type JsonObject,
   type JsonSchema,
-  schemaPointerToValuePath,
   type UiNode,
 } from '../core';
 import { type CanvasDropTarget, catalogDragType, DesignerCanvas } from './designer-canvas';
@@ -26,6 +25,15 @@ import {
   findCatalogItem,
 } from './designer-catalog';
 import { CatalogIcon, DesignerIcon } from './designer-icons';
+import {
+  allocateSchemaProperty,
+  findDesignerParent,
+  isDesignerContainer,
+  schemaBindingForNode,
+  schemaForNode,
+  schemaPathForProperty,
+  schemaScopeForContainer,
+} from './designer-schema';
 import type { FormNodeRegistry } from './node-registry';
 import { FormRenderer, type FormRendererProps, type FormWidgetRegistry } from './renderer';
 import { SelectControl } from './select-control';
@@ -74,13 +82,9 @@ function nextId(document: FormDocument, prefix: string): string {
   return allocateId(new Set(document.ui.nodes.map((node) => node.id)), prefix);
 }
 
-function isContainer(node: UiNode | undefined): node is UiNode {
-  return Boolean(node && !['field', 'repeater', 'content'].includes(node.kind));
-}
-
 function insertionContainer(document: FormDocument, selectedId: string): UiNode | undefined {
   const selected = document.ui.nodes.find((node) => node.id === selectedId);
-  if (isContainer(selected)) {
+  if (isDesignerContainer(document, selected)) {
     if (
       selected.layout === 'columns' ||
       selected.layout === 'tabs' ||
@@ -90,7 +94,7 @@ function insertionContainer(document: FormDocument, selectedId: string): UiNode 
     }
     return selected;
   }
-  return findParent(document, selectedId);
+  return findDesignerParent(document, selectedId);
 }
 
 function compileMutation(
@@ -122,12 +126,8 @@ function collectDescendants(
   return output;
 }
 
-function findParent(document: FormDocument, id: string): UiNode | undefined {
-  return document.ui.nodes.find((node) => node.children?.includes(id));
-}
-
-function propertyFromNode(node: UiNode | undefined): string | undefined {
-  return node?.schemaPath ? schemaPointerToValuePath(node.schemaPath)?.split('.')[0] : undefined;
+function propertyFromNode(document: FormDocument, node: UiNode | undefined): string | undefined {
+  return schemaBindingForNode(document, node)?.property;
 }
 
 export function FormDesigner(props: FormDesignerProps) {
@@ -168,10 +168,8 @@ export function FormDesigner(props: FormDesignerProps) {
   const [notice, setNotice] = useState<DesignerNotice>();
   const activeValue = props.value ?? value;
   const selected = document.ui.nodes.find((node) => node.id === selectedId);
-  const selectedProperty = propertyFromNode(selected);
-  const selectedSchema = selectedProperty
-    ? document.schema.properties?.[selectedProperty]
-    : undefined;
+  const selectedProperty = propertyFromNode(document, selected);
+  const selectedSchema = schemaForNode(document, selected);
   const mutateDocument = (mutate: (draft: FormDocument) => void) =>
     compileMutation(document, mutate, compileOptions, (message) =>
       compiled.ok ? setNotice({ tone: 'error', message }) : undefined,
@@ -199,26 +197,34 @@ export function FormDesigner(props: FormDesignerProps) {
         ? 'field'
         : item.kind;
     const nodeId = allocateId(existingIds, prefix);
-    const property = nodeId.replaceAll('-', '_');
+    const preferredProperty = nodeId.replaceAll('-', '_');
     const next = mutateDocument((draft) => {
+      const parent = target
+        ? draft.ui.nodes.find((node) => node.id === target.containerId)
+        : (insertionContainer(draft, selectedId) ??
+          draft.ui.nodes.find((node) => node.id === draft.ui.root));
+      if (!isDesignerContainer(draft, parent)) return;
+      const schemaScope = schemaScopeForContainer(draft, parent.id);
+      const bindSchema = (schema: JsonSchema | undefined): string => {
+        schemaScope.schema.type = 'object';
+        schemaScope.schema.properties ??= {};
+        const property = allocateSchemaProperty(schemaScope.schema, preferredProperty);
+        schemaScope.schema.properties[property] = {
+          ...structuredClone(schema ?? {}),
+          title: item.label,
+        };
+        return schemaPathForProperty(schemaScope.pointer, property);
+      };
       const nodes: UiNode[] = [];
       if (item.extensionKey) {
         const defaults = structuredClone(item.defaults ?? {});
         const bindsValue = item.kind === 'field' || item.kind === 'repeater';
-        if (bindsValue) {
-          draft.schema.type = 'object';
-          draft.schema.properties ??= {};
-          draft.schema.properties[property] = {
-            ...structuredClone(item.schema ?? {}),
-            title: item.label,
-          };
-        }
         nodes.push({
           ...defaults,
           id: nodeId,
           kind: item.kind,
           label: item.label,
-          schemaPath: bindsValue ? `/properties/${property}` : undefined,
+          schemaPath: bindsValue ? bindSchema(item.schema) : undefined,
           widget: item.extensionKey,
           children:
             item.kind === 'section' || item.kind === 'group'
@@ -227,19 +233,16 @@ export function FormDesigner(props: FormDesignerProps) {
           width: defaults.width ?? 12,
         });
       } else if (item.kind === 'field' || item.kind === 'repeater') {
-        draft.schema.type = 'object';
-        draft.schema.properties ??= {};
-        draft.schema.properties[property] = {
-          ...structuredClone(item.schema ?? {}),
-          title: item.label,
-        };
         nodes.push({
           id: nodeId,
           kind: item.kind,
           label: item.label,
-          schemaPath: `/properties/${property}`,
+          schemaPath: bindSchema(item.schema),
           widget: item.widget,
           options: item.options ? structuredClone(item.options) : undefined,
+          children: item.preset === 'repeater-group' ? [] : undefined,
+          columns: item.preset === 'repeater-group' ? 12 : undefined,
+          gap: item.preset === 'repeater-group' ? 12 : undefined,
           width: 12,
         });
       } else if (item.kind === 'content') {
@@ -305,12 +308,6 @@ export function FormDesigner(props: FormDesignerProps) {
         }
       }
       draft.ui.nodes.push(...nodes);
-
-      const parent = target
-        ? draft.ui.nodes.find((node) => node.id === target.containerId)
-        : (insertionContainer(draft, selectedId) ??
-          draft.ui.nodes.find((node) => node.id === draft.ui.root));
-      if (!isContainer(parent)) return;
       parent.children ??= [];
       const selectedIndex = parent.children.indexOf(selectedId);
       const fallbackIndex = selectedIndex >= 0 ? selectedIndex + 1 : parent.children.length;
@@ -342,9 +339,14 @@ export function FormDesigner(props: FormDesignerProps) {
     if (!selectedProperty) return;
     commit(
       mutateDocument((draft) => {
-        const properties = draft.schema.properties;
-        const schema = properties?.[selectedProperty];
-        if (properties && schema) properties[selectedProperty] = { ...schema, ...changes };
+        const node = draft.ui.nodes.find((candidate) => candidate.id === selectedId);
+        const binding = schemaBindingForNode(draft, node);
+        if (binding?.parentSchema.properties) {
+          binding.parentSchema.properties[binding.property] = {
+            ...binding.schema,
+            ...changes,
+          };
+        }
       }),
     );
   };
@@ -358,10 +360,13 @@ export function FormDesigner(props: FormDesignerProps) {
           if (index >= 0) draft.ui.nodes[index] = { ...draft.ui.nodes[index], ...changes.node };
         }
         if (changes.schema && selectedProperty) {
-          const properties = draft.schema.properties;
-          const schema = properties?.[selectedProperty];
-          if (properties && schema) {
-            properties[selectedProperty] = { ...schema, ...changes.schema };
+          const node = draft.ui.nodes.find((candidate) => candidate.id === selectedId);
+          const binding = schemaBindingForNode(draft, node);
+          if (binding?.parentSchema.properties) {
+            binding.parentSchema.properties[binding.property] = {
+              ...binding.schema,
+              ...changes.schema,
+            };
           }
         }
       }),
@@ -372,10 +377,13 @@ export function FormDesigner(props: FormDesignerProps) {
     if (!selectedProperty) return;
     commit(
       mutateDocument((draft) => {
-        const requirements = new Set(draft.schema.required ?? []);
-        if (required) requirements.add(selectedProperty);
-        else requirements.delete(selectedProperty);
-        draft.schema.required = [...requirements];
+        const node = draft.ui.nodes.find((candidate) => candidate.id === selectedId);
+        const binding = schemaBindingForNode(draft, node);
+        if (!binding) return;
+        const requirements = new Set(binding.parentSchema.required ?? []);
+        if (required) requirements.add(binding.property);
+        else requirements.delete(binding.property);
+        binding.parentSchema.required = [...requirements];
       }),
     );
   };
@@ -390,16 +398,15 @@ export function FormDesigner(props: FormDesignerProps) {
       mutateDocument((draft) => {
         const node = draft.ui.nodes.find((candidate) => candidate.id === selectedId);
         if (node) node.options = options;
-        if (selectedProperty && draft.schema.properties?.[selectedProperty]) {
-          draft.schema.properties[selectedProperty].enum = options.map((option) => option.value);
-        }
+        const binding = schemaBindingForNode(draft, node);
+        if (binding) binding.schema.enum = options.map((option) => option.value);
       }),
     );
   };
 
   const removeSelected = () => {
     if (!selected || selected.id === document.ui.root) return;
-    const currentParent = findParent(document, selected.id);
+    const currentParent = findDesignerParent(document, selected.id);
     if (
       (currentParent?.layout === 'tabs' || currentParent?.layout === 'collapse') &&
       (currentParent.children?.length ?? 0) <= 1
@@ -408,17 +415,29 @@ export function FormDesigner(props: FormDesignerProps) {
     const parentId = currentParent?.id ?? document.ui.root;
     const removed = collectDescendants(document, selected.id);
     const next = mutateDocument((draft) => {
+      const removedNodes = document.ui.nodes.filter((node) => removed.has(node.id));
+      const schemaRoots = removedNodes.filter(
+        (node) =>
+          node.schemaPath &&
+          !removedNodes.some(
+            (candidate) =>
+              candidate.id !== node.id &&
+              candidate.schemaPath &&
+              node.schemaPath?.startsWith(`${candidate.schemaPath}/`),
+          ),
+      );
+      for (const source of schemaRoots) {
+        const draftNode = draft.ui.nodes.find((node) => node.id === source.id);
+        const binding = schemaBindingForNode(draft, draftNode);
+        if (!binding?.parentSchema.properties) continue;
+        delete binding.parentSchema.properties[binding.property];
+        binding.parentSchema.required = binding.parentSchema.required?.filter(
+          (item) => item !== binding.property,
+        );
+      }
       draft.ui.nodes = draft.ui.nodes
         .filter((node) => !removed.has(node.id))
         .map((node) => ({ ...node, children: node.children?.filter((id) => !removed.has(id)) }));
-      for (const id of removed) {
-        const property = propertyFromNode(
-          document.ui.nodes.find((candidate) => candidate.id === id),
-        );
-        if (property && draft.schema.properties) delete draft.schema.properties[property];
-        if (property)
-          draft.schema.required = draft.schema.required?.filter((item) => item !== property);
-      }
       draft.rules = draft.rules?.filter((rule) => !removed.has(rule.target));
     });
     if (!next) return;
@@ -447,9 +466,8 @@ export function FormDesigner(props: FormDesignerProps) {
     const nodeId = idMap.get(selected.id);
     if (!nodeId) return;
     const next = mutateDocument((draft) => {
-      draft.schema.properties ??= {};
-      const existingProperties = new Set(Object.keys(draft.schema.properties));
       const clones: UiNode[] = [];
+      const schemaPathReplacements: Array<{ source: string; clone: string }> = [];
       for (const sourceId of sourceIds) {
         const source = document.ui.nodes.find((node) => node.id === sourceId);
         const cloneId = idMap.get(sourceId);
@@ -460,27 +478,41 @@ export function FormDesigner(props: FormDesignerProps) {
           label: sourceId === selected.id ? `${source.label ?? '节点'} 副本` : source.label,
           children: source.children?.map((child) => idMap.get(child) ?? child),
         };
-        const sourceProperty = propertyFromNode(source);
-        if (sourceProperty) {
-          let property = `${sourceProperty}_copy`;
-          let suffix = 2;
-          while (existingProperties.has(property)) {
-            property = `${sourceProperty}_copy_${suffix}`;
-            suffix += 1;
-          }
-          existingProperties.add(property);
-          const sourceSchema = document.schema.properties?.[sourceProperty];
-          if (sourceSchema) draft.schema.properties[property] = structuredClone(sourceSchema);
-          clone.schemaPath = `/properties/${property}`;
-          if (document.schema.required?.includes(sourceProperty)) {
-            draft.schema.required ??= [];
-            draft.schema.required.push(property);
+        if (source.schemaPath) {
+          const inherited = schemaPathReplacements
+            .filter(({ source: path }) => source.schemaPath?.startsWith(`${path}/`))
+            .sort((left, right) => right.source.length - left.source.length)[0];
+          if (inherited) {
+            clone.schemaPath = `${inherited.clone}${source.schemaPath.slice(inherited.source.length)}`;
+          } else {
+            const sourceBinding = schemaBindingForNode(document, source);
+            const draftSource = draft.ui.nodes.find((node) => node.id === source.id);
+            const draftBinding = schemaBindingForNode(draft, draftSource);
+            if (sourceBinding && draftBinding) {
+              draftBinding.parentSchema.properties ??= {};
+              const property = allocateSchemaProperty(
+                draftBinding.parentSchema,
+                `${sourceBinding.property}_copy`,
+              );
+              draftBinding.parentSchema.properties[property] = structuredClone(
+                sourceBinding.schema,
+              );
+              clone.schemaPath = schemaPathForProperty(draftBinding.parentPointer, property);
+              if (sourceBinding.parentSchema.required?.includes(sourceBinding.property)) {
+                draftBinding.parentSchema.required ??= [];
+                draftBinding.parentSchema.required.push(property);
+              }
+              schemaPathReplacements.push({
+                source: source.schemaPath,
+                clone: clone.schemaPath,
+              });
+            }
           }
         }
         clones.push(clone);
       }
       draft.ui.nodes.push(...clones);
-      const parent = findParent(draft, selected.id);
+      const parent = findDesignerParent(draft, selected.id);
       const childIndex = parent?.children?.indexOf(selected.id) ?? -1;
       parent?.children?.splice(childIndex + 1, 0, nodeId);
     });
@@ -515,7 +547,7 @@ export function FormDesigner(props: FormDesignerProps) {
     if (!selected) return;
     commit(
       mutateDocument((draft) => {
-        const parent = findParent(draft, selected.id);
+        const parent = findDesignerParent(draft, selected.id);
         const index = parent?.children?.indexOf(selected.id) ?? -1;
         const target = index + direction;
         if (!parent?.children || index < 0 || target < 0 || target >= parent.children.length)
@@ -532,12 +564,50 @@ export function FormDesigner(props: FormDesignerProps) {
     if (nodeId === document.ui.root || nodeId === target.containerId) return;
     const descendants = collectDescendants(document, nodeId);
     if (descendants.has(target.containerId)) return;
-    const sourceParent = findParent(document, nodeId);
+    const sourceParent = findDesignerParent(document, nodeId);
     const sourceIndex = sourceParent?.children?.indexOf(nodeId) ?? -1;
     commit(
       mutateDocument((draft) => {
         const container = draft.ui.nodes.find((node) => node.id === target.containerId);
-        if (!isContainer(container)) return;
+        if (!isDesignerContainer(draft, container)) return;
+        const movedIds = collectDescendants(draft, nodeId);
+        const movedNodes = draft.ui.nodes.filter((node) => movedIds.has(node.id));
+        const bindingRoots = movedNodes.filter(
+          (node) =>
+            node.schemaPath &&
+            !movedNodes.some(
+              (candidate) =>
+                candidate.id !== node.id &&
+                candidate.schemaPath &&
+                node.schemaPath?.startsWith(`${candidate.schemaPath}/`),
+            ),
+        );
+        const targetScope = schemaScopeForContainer(draft, container.id);
+        for (const bindingRoot of bindingRoots) {
+          const binding = schemaBindingForNode(draft, bindingRoot);
+          if (!binding || binding.parentPointer === targetScope.pointer) continue;
+          targetScope.schema.type = 'object';
+          targetScope.schema.properties ??= {};
+          const property = allocateSchemaProperty(targetScope.schema, binding.property);
+          const required = binding.parentSchema.required?.includes(binding.property) ?? false;
+          targetScope.schema.properties[property] = binding.schema;
+          delete binding.parentSchema.properties?.[binding.property];
+          binding.parentSchema.required = binding.parentSchema.required?.filter(
+            (item) => item !== binding.property,
+          );
+          if (required) {
+            targetScope.schema.required ??= [];
+            targetScope.schema.required.push(property);
+          }
+          const previousPath = bindingRoot.schemaPath as string;
+          const nextPath = schemaPathForProperty(targetScope.pointer, property);
+          for (const moved of movedNodes) {
+            if (moved.schemaPath === previousPath) moved.schemaPath = nextPath;
+            else if (moved.schemaPath?.startsWith(`${previousPath}/`)) {
+              moved.schemaPath = `${nextPath}${moved.schemaPath.slice(previousPath.length)}`;
+            }
+          }
+        }
         for (const node of draft.ui.nodes)
           node.children = node.children?.filter((child) => child !== nodeId);
         container.children ??= [];
@@ -1023,7 +1093,7 @@ function PalettePanel({
                       data-variant="outline"
                       key={item.id}
                       title={item.description}
-                      aria-label={`添加${item.label}${item.kind === 'field' || item.kind === 'repeater' ? '字段' : ''}`}
+                      aria-label={`添加${item.label}${item.kind === 'field' || (item.kind === 'repeater' && item.preset !== 'repeater-group') ? '字段' : ''}`}
                       draggable
                       onDragStart={(event) => event.dataTransfer.setData(catalogDragType, item.id)}
                       onClick={() => onAdd(item)}
@@ -1287,6 +1357,11 @@ function PropertiesPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
           <input aria-label="字段标识" value={props.selectedProperty ?? ''} readOnly />
         </Control>
       )}
+      {selected.kind === 'repeater' && selected.itemKey && (
+        <Control label="行标识字段" hint="用于稳定排序与组件状态">
+          <input aria-label="行标识字段" value={selected.itemKey} readOnly />
+        </Control>
+      )}
       <Control label="说明">
         <textarea
           aria-label="字段说明"
@@ -1434,11 +1509,11 @@ function ValidationPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
   const { selected, selectedSchema } = props;
   if (selected.kind !== 'field' && selected.kind !== 'repeater')
     return <p className="a3s-form-empty">当前节点没有字段校验设置。</p>;
-  const required = Boolean(
-    props.selectedProperty && props.document.schema.required?.includes(props.selectedProperty),
-  );
+  const binding = schemaBindingForNode(props.document, selected);
+  const required = Boolean(binding?.parentSchema.required?.includes(binding.property));
   const stringField = selectedSchema?.type === 'string';
   const numberField = selectedSchema?.type === 'number' || selectedSchema?.type === 'integer';
+  const arrayField = selectedSchema?.type === 'array';
   return (
     <div className="a3s-form-inspector-fields">
       <Toggle label="必填字段" checked={required} onChange={props.onSetRequired} />
@@ -1497,6 +1572,32 @@ function ValidationPanel(props: Parameters<typeof Inspector>[0] & { selected: Ui
               value={selectedSchema?.maximum ?? ''}
               onChange={(event) =>
                 props.onUpdateSchema({ maximum: numberOrUndefined(event.target.value) })
+              }
+            />
+          </Control>
+        </div>
+      )}
+      {arrayField && (
+        <div className="a3s-form-inline-controls">
+          <Control label="最少项目">
+            <input
+              aria-label="最少项目数"
+              type="number"
+              min="0"
+              value={selectedSchema?.minItems ?? ''}
+              onChange={(event) =>
+                props.onUpdateSchema({ minItems: numberOrUndefined(event.target.value) })
+              }
+            />
+          </Control>
+          <Control label="最多项目">
+            <input
+              aria-label="最多项目数"
+              type="number"
+              min="0"
+              value={selectedSchema?.maxItems ?? ''}
+              onChange={(event) =>
+                props.onUpdateSchema({ maxItems: numberOrUndefined(event.target.value) })
               }
             />
           </Control>
@@ -1697,6 +1798,6 @@ function nodeDepth(
 ): number {
   if (seen.has(id)) return depth;
   seen.add(id);
-  const parent = findParent(document, id);
+  const parent = findDesignerParent(document, id);
   return parent ? nodeDepth(document, parent.id, depth + 1, seen) : depth;
 }

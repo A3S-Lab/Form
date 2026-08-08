@@ -570,6 +570,7 @@ const catalogIconById: Readonly<Record<string, DesignerIconName>> = {
   checkbox: 'check-square',
   switch: 'toggle',
   repeater: 'list',
+  'repeater-group': 'list',
   grid: 'grid',
   'columns-2': 'columns-2',
   'columns-3': 'columns-3',

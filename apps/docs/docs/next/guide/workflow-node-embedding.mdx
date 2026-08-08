@@ -72,6 +72,25 @@ The host still decides whether the actor can edit, where the value is stored, wh
 
 Locale overrides are host configuration and are not stored in the workflow node value or form document. The compiled plan also records field subscriptions, so editing one node setting does not redraw or refetch unrelated settings. Pagination and field callbacks still receive the newest complete controlled value.
 
+## Keep repeater identity outside node configuration
+
+An object-array parameter can use a `repeater` node with child fields. The host receives the same plain array through `onChange`; A3S Form does not add a hidden row key.
+
+If an external state store recreates row objects, derive identity from a business property:
+
+```tsx
+const hostAdapter = {
+  identifyRepeaterItem({ node, item }) {
+    if (node.id !== 'routes' || !item || typeof item !== 'object' || Array.isArray(item)) {
+      return undefined;
+    }
+    return typeof item.route === 'string' ? item.route : undefined;
+  },
+};
+```
+
+Declare `itemKey` only when the item schema intentionally contains a required string identifier. Read the [repeatable field-group guide](/next/guide/repeatable-field-groups) for nested paths, limits, and current row-scoped rule restrictions.
+
 ## CSS stays inside the form
 
 The Form stylesheet does not contain Tailwind preflight, `:root` tokens, or unscoped element resets. A package check enforces a 120 KB raw / 20 KB gzip budget and rejects host-global selectors.

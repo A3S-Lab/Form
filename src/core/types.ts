@@ -68,6 +68,8 @@ export interface UiNode {
   options?: UiOption[];
   customProps?: JsonObject;
   dataSource?: string;
+  /** Object property used to preserve a repeater row across host-controlled updates. */
+  itemKey?: string;
   readOnly?: boolean;
   hidden?: boolean;
 }
@@ -153,7 +155,15 @@ export interface FormLocaleMessages {
   checkboxEnabled: string;
   selectPlaceholder: string;
   repeaterRemove: string;
+  repeaterRemoveLabel: string;
   repeaterAdd: string;
+  repeaterItemLabel: string;
+  repeaterEmpty: string;
+  repeaterTemplateEmpty: string;
+  repeaterMoveUpLabel: string;
+  repeaterMoveDownLabel: string;
+  repeaterMinimumReached: string;
+  repeaterMaximumReached: string;
   validationPending: string;
   validationPendingLabel: string;
   dataSourceSearchLabel: string;
@@ -261,6 +271,10 @@ export interface CompileOptions {
 
 export interface CompiledNode extends UiNode {
   valuePath?: string;
+  /** Dot-separated value path with `*` placeholders for repeater row indices. */
+  valuePathTemplate?: string;
+  /** Ordered outer-to-inner repeater node ids required by valuePathTemplate. */
+  repeaterAncestors?: readonly string[];
   schema?: JsonSchema;
   depth: number;
 }
@@ -443,12 +457,27 @@ export interface ActionRequest {
   plan: FormPlan;
 }
 
+export interface RepeaterItemIdentityRequest {
+  /** The immutable plan that owns the repeater node. */
+  plan: FormPlan;
+  /** The compiled repeater node being rendered. */
+  node: CompiledNode;
+  /** The host-controlled row value. The callback must not mutate it. */
+  item: JsonValue;
+  /** The row's current position inside this repeater. */
+  index: number;
+  /** The concrete path to this repeater, including any outer row indices. */
+  valuePath: string;
+}
+
 export interface FormHostAdapter {
   resolveDataSource?: (
     request: DataSourceRequest,
     signal: AbortSignal,
   ) => Promise<DataSourceResponse>;
   validateValue?: FormAsyncValidator;
+  /** Returns a stable business identity for a row without adding engine metadata to its value. */
+  identifyRepeaterItem?: (request: RepeaterItemIdentityRequest) => string | undefined;
   // biome-ignore lint/suspicious/noConfusingVoidType: Host actions may intentionally return no payload.
   invokeAction?: (request: ActionRequest, signal: AbortSignal) => Promise<JsonValue | void>;
 }

@@ -1,0 +1,82 @@
+# Repeatable field groups
+
+Use a repeatable field group when an object-array setting deserves normal form controls instead of one JSON editor. Workflow routes, recipients, headers, tool parameters, and approval steps are common examples.
+
+## Bind the row template
+
+The schema owns the array and object shape. One `repeater` node binds to the array; its children bind below `items`.
+
+```ts
+schema: {
+  type: 'object',
+  properties: {
+    routes: {
+      type: 'array',
+      maxItems: 12,
+      items: {
+        type: 'object',
+        properties: {
+          match: { type: 'string', default: 'customer' },
+          route: { type: 'string', minLength: 1, default: 'customer' },
+        },
+        required: ['match', 'route'],
+        additionalProperties: false,
+      },
+    },
+  },
+},
+ui: {
+  root: 'root',
+  nodes: [
+    { id: 'root', kind: 'root', children: ['routes'] },
+    {
+      id: 'routes',
+      kind: 'repeater',
+      label: 'Routes',
+      schemaPath: '/properties/routes',
+      children: ['route-match', 'route-name'],
+    },
+    {
+      id: 'route-match',
+      kind: 'field',
+      label: 'Match',
+      schemaPath: '/properties/routes/items/properties/match',
+      width: 6,
+    },
+    {
+      id: 'route-name',
+      kind: 'field',
+      label: 'Route',
+      schemaPath: '/properties/routes/items/properties/route',
+      width: 6,
+    },
+  ],
+},
+```
+
+The compiler produces templates such as `routes.*.match`; the renderer resolves a concrete path such as `routes.1.match`. Nested repeaters add one index per array. Host errors and field-level asynchronous validation use concrete paths.
+
+## Choose an identity contract
+
+Runtime-owned identity is the default. It preserves field state during local insertion, editing, movement, and removal without changing the controlled value.
+
+For rows replaced by an external host store, provide `hostAdapter.identifyRepeaterItem` and derive a key from existing business data. The callback must not mutate the item. Duplicate, absent, or invalid identities fall back to runtime keys.
+
+`UiNode.itemKey` is optional. It is accepted only when the item schema declares that property as a required string. New rows receive a generated value because the document explicitly made the identifier part of the value contract. Do not add an engine-only `rowId` to workflow-node configuration.
+
+## Runtime behavior
+
+- Add, remove, move up, and move down emit a complete controlled value.
+- `minItems` and `maxItems` disable controls at their boundaries.
+- Read-only state covers row fields, ordering controls, add/remove controls, and actions.
+- Validation summaries focus the exact nested input.
+- Narrow host containers collapse row grids to one column.
+- Primitive scalar repeaters continue to use the compact row renderer.
+
+The Router form in the Playground is the reference workflow-node sample. Its `routes` value remains `{ when, route }[]`; no engine metadata is persisted.
+
+## Current limits
+
+`computed` and `validate` rules cannot target fields inside a repeater until row-scoped expressions are specified. `visible` and `enabled` rules are allowed but apply one form-scoped result to every row. Data-source dependencies are static and cannot yet reference paths such as `routes.*.provider`.
+
+Data grids, edit grids, matrices, bulk operations, and true wizards remain separate roadmap work.

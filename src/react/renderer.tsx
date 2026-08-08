@@ -22,8 +22,10 @@ import {
   formatFormMessage,
   IncrementalComputedRuleEvaluator,
   type JsonObject,
+  matchValuePathTemplate,
   readFormValue,
   resolveFormLocaleCatalog,
+  resolveValuePathTemplate,
   type UiNode,
   updateFormValue,
   validateFormValueAsync,
@@ -31,6 +33,7 @@ import {
 import { DataSourceSearch, DataSourceStatus, useFormDataSource } from './data-source';
 import { type FormWidgetRegistry, NativeWidget } from './native-widget';
 import type { FormNodeRegistry } from './node-registry';
+import { RepeaterField } from './repeater';
 import { subscribedNodePropsEqual } from './subscriptions';
 
 export type { FormWidget, FormWidgetProps, FormWidgetRegistry } from './native-widget';
@@ -55,6 +58,27 @@ function formItemStyle(width: number | undefined, extra?: React.CSSProperties) {
     '--a3s-form-item-column': `span ${width ?? 12}`,
     ...extra,
   } as React.CSSProperties;
+}
+
+function nodeValuePath(
+  node: FormPlan['nodes'][number] | undefined,
+  rowIndices: readonly number[] | undefined,
+): string | undefined {
+  if (node?.valuePathTemplate?.includes('*')) {
+    return resolveValuePathTemplate(node.valuePathTemplate, rowIndices);
+  }
+  return node?.valuePath;
+}
+
+function nodeInputId(prefix: string, nodeId: string, rowKeys: readonly string[] | undefined) {
+  return `${prefix}-${nodeId}${rowKeys?.length ? `-${rowKeys.join('-')}` : ''}`;
+}
+
+function nodeForValuePath(plan: FormPlan, path: string) {
+  return Object.values(plan.nodeById).find((node) => {
+    if (node.valuePath === path) return true;
+    return matchValuePathTemplate(node.valuePathTemplate, path) !== undefined;
+  });
 }
 
 function isRequiredField(plan: FormPlan, node: UiNode): boolean {
@@ -82,6 +106,8 @@ interface NodeViewProps extends FormRendererProps {
   prefix: string;
   onFieldBlur: (nodeId: string, path: string) => void;
   validatingPaths: ReadonlySet<string>;
+  rowIndices?: readonly number[];
+  rowKeys?: readonly string[];
   suppressHeading?: boolean;
 }
 
@@ -126,7 +152,8 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
   const node = plan.nodeById[nodeId];
   const [activeLayoutChild, setActiveLayoutChild] = useState<string>();
   const state = fieldState(plan, nodeId, value);
-  const validating = node.valuePath ? props.validatingPaths.has(node.valuePath) : false;
+  const valuePath = nodeValuePath(node, props.rowIndices);
+  const validating = valuePath ? props.validatingPaths.has(valuePath) : false;
   const dataSource = useFormDataSource({
     coordinator: props.dataSourceCoordinator,
     getValue: props.getValue,
@@ -142,9 +169,9 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
   const extension = node.widget ? nodeRegistry[node.widget] : undefined;
   if (extension) {
     const CustomNode = extension.render;
-    const current = node.valuePath ? readFormValue(value, node.valuePath) : undefined;
-    const errors = node.valuePath ? (errorMap.get(node.valuePath) ?? []) : [];
-    const inputId = `${prefix}-${node.id}`;
+    const current = valuePath ? readFormValue(value, valuePath) : undefined;
+    const errors = valuePath ? (errorMap.get(valuePath) ?? []) : [];
+    const inputId = nodeInputId(prefix, node.id, props.rowKeys);
     const children = (node.children ?? []).length ? (
       <div className="a3s-form-custom-children">
         {(node.children ?? []).map((child) => (
@@ -156,6 +183,7 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
       <div
         className={`a3s-form-custom-node field${errors.length ? ' is-invalid' : ''}`}
         data-node-type={node.widget}
+        data-a3s-form-path={valuePath}
         data-invalid={errors.length > 0 || undefined}
         data-validating={validating || undefined}
         aria-busy={
@@ -172,6 +200,8 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
           id={inputId}
           node={node}
           plan={plan}
+          valuePath={valuePath}
+          rowIndices={props.rowIndices ?? []}
           value={current}
           formValue={value}
           messages={props.messages}
@@ -186,13 +216,11 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
           options={options}
           dataSource={dataSource}
           onChange={(next) => {
-            if (node.valuePath) onChange(updateFormValue(props.getValue(), node.valuePath, next));
+            if (valuePath) onChange(updateFormValue(props.getValue(), valuePath, next));
           }}
           onFormChange={onChange}
           onBlur={
-            state.enabled && node.valuePath
-              ? () => props.onFieldBlur(node.id, node.valuePath as string)
-              : undefined
+            state.enabled && valuePath ? () => props.onFieldBlur(node.id, valuePath) : undefined
           }
           onFocus={dataSource.activate}
         >
@@ -343,10 +371,10 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
       </Tag>
     );
   }
-  if (!node.valuePath) return null;
-  const current = readFormValue(value, node.valuePath);
-  const errors = errorMap.get(node.valuePath) ?? [];
-  const inputId = `${prefix}-${node.id}`;
+  if (!valuePath) return null;
+  const current = readFormValue(value, valuePath);
+  const errors = errorMap.get(valuePath) ?? [];
+  const inputId = nodeInputId(prefix, node.id, props.rowKeys);
   const required = isRequiredField(plan, node);
   const describedBy = [
     node.description ? `${inputId}-help` : undefined,
@@ -358,80 +386,50 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
   if (node.kind === 'repeater') {
     const items = Array.isArray(current) ? current : [];
     return (
-      <fieldset
-        className={`a3s-form-field a3s-form-repeater fieldset${errors.length ? ' is-invalid' : ''}`}
+      <RepeaterField
+        id={inputId}
+        node={node}
+        items={items}
+        valuePath={valuePath}
+        required={required}
+        disabled={Boolean(props.readOnly || !state.enabled)}
+        validating={validating}
+        describedBy={describedBy || undefined}
+        errors={errors}
+        messages={props.messages}
         style={formItemStyle(node.width)}
-        disabled={props.readOnly || !state.enabled}
-        aria-describedby={describedBy || undefined}
-        aria-busy={validating || undefined}
-        data-validating={validating || undefined}
-        onBlur={(event) => {
-          if (state.enabled && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            props.onFieldBlur(node.id, node.valuePath as string);
-          }
+        onBlur={() => {
+          if (state.enabled) props.onFieldBlur(node.id, valuePath);
         }}
-      >
-        <legend className={required ? 'is-required' : undefined}>{node.label ?? node.id}</legend>
-        {node.description && (
-          <div className="a3s-form-help" id={`${inputId}-help`}>
-            {node.description}
-          </div>
+        onChange={(next) => onChange(updateFormValue(props.getValue(), valuePath, next))}
+        identifyItem={(item, index) =>
+          props.hostAdapter?.identifyRepeaterItem?.({
+            plan,
+            node,
+            item,
+            index,
+            valuePath,
+          })
+        }
+        renderRow={(index, key) => (
+          <>
+            {(node.children ?? []).map((child) => (
+              <NodeView
+                key={child}
+                {...props}
+                nodeId={child}
+                rowIndices={[...(props.rowIndices ?? []), index]}
+                rowKeys={[...(props.rowKeys ?? []), key]}
+              />
+            ))}
+          </>
         )}
-        {items.map((item, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: Primitive repeater values have no separate stable identity.
-          <div className="a3s-form-repeat-row" key={`${node.id}-${index}`}>
-            <input
-              className="input"
-              aria-label={`${node.label ?? node.id} ${index + 1}`}
-              value={String(item ?? '')}
-              onChange={(event) => {
-                const next = [...items];
-                next[index] = event.target.value;
-                onChange(updateFormValue(props.getValue(), node.valuePath as string, next));
-              }}
-            />
-            <button
-              type="button"
-              className="btn"
-              data-size="sm"
-              data-variant="destructive"
-              onClick={() =>
-                onChange(
-                  updateFormValue(
-                    props.getValue(),
-                    node.valuePath as string,
-                    items.filter((_, itemIndex) => itemIndex !== index),
-                  ),
-                )
-              }
-            >
-              {props.messages.repeaterRemove}
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="a3s-form-secondary btn"
-          data-size="sm"
-          data-variant="secondary"
-          onClick={() =>
-            onChange(updateFormValue(props.getValue(), node.valuePath as string, [...items, '']))
-          }
-        >
-          {props.messages.repeaterAdd}
-        </button>
-        {errors.map((error, index) => (
-          <div
-            className="a3s-form-error"
-            id={`${inputId}-error-${index + 1}`}
-            role="alert"
-            key={`${error.code}-${error.message}`}
-          >
-            {error.message}
-          </div>
-        ))}
-        {validating && <ValidationStatus label={node.label ?? node.id} messages={props.messages} />}
-      </fieldset>
+        validationStatus={
+          validating ? (
+            <ValidationStatus label={node.label ?? node.id} messages={props.messages} />
+          ) : undefined
+        }
+      />
     );
   }
   return (
@@ -439,6 +437,7 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
       className={`a3s-form-field field${errors.length ? ' is-invalid' : ''}`}
       data-invalid={errors.length > 0 || undefined}
       data-validating={validating || undefined}
+      data-a3s-form-path={valuePath}
       aria-busy={
         validating || dataSource.status === 'loading' || dataSource.loadingMore || undefined
       }
@@ -479,12 +478,8 @@ function NodeViewContent(props: NodeViewProps): ReactNode {
         options={options}
         dataSource={dataSource}
         messages={props.messages}
-        onChange={(next) =>
-          onChange(updateFormValue(props.getValue(), node.valuePath as string, next))
-        }
-        onBlur={
-          state.enabled ? () => props.onFieldBlur(node.id, node.valuePath as string) : undefined
-        }
+        onChange={(next) => onChange(updateFormValue(props.getValue(), valuePath, next))}
+        onBlur={state.enabled ? () => props.onFieldBlur(node.id, valuePath) : undefined}
         onFocus={dataSource.activate}
       />
       <DataSourceStatus
@@ -638,7 +633,18 @@ export function FormRenderer(props: FormRendererProps) {
   useEffect(() => () => dataSourceCoordinator.clear(), [dataSourceCoordinator]);
 
   const focusError = (path: string) => {
-    const node = Object.values(props.plan.nodeById).find((item) => item.valuePath === path);
+    const field = [
+      ...(formRef.current?.querySelectorAll<HTMLElement>('[data-a3s-form-path]') ?? []),
+    ].find((element) => element.getAttribute('data-a3s-form-path') === path);
+    const fieldControl = field?.matches('input, select, textarea, button, [tabindex]')
+      ? field
+      : field?.querySelector<HTMLElement>('input, select, textarea, button, [tabindex]');
+    if (fieldControl) {
+      fieldControl.focus();
+      fieldControl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    const node = nodeForValuePath(props.plan, path);
     if (!node) return;
     const control = window.document.getElementById(`${prefix}-${node.id}`);
     control?.focus();
@@ -832,9 +838,7 @@ export function FormRenderer(props: FormRendererProps) {
           </strong>
           <ul>
             {errors.map((error) => {
-              const node = Object.values(props.plan.nodeById).find(
-                (item) => item.valuePath === error.path,
-              );
+              const node = nodeForValuePath(props.plan, error.path);
               return (
                 <li key={`${error.path}-${error.code}-${error.message}`}>
                   {node ? (

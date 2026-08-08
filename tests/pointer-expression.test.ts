@@ -6,8 +6,11 @@ import {
   type FormExpression,
   getAtPath,
   getAtPointer,
+  matchValuePathTemplate,
   removeAtPath,
+  resolveValuePathTemplate,
   schemaPointerToValuePath,
+  schemaPointerToValuePathTemplate,
   setAtPath,
 } from '../src/core';
 
@@ -40,6 +43,74 @@ describe('JSON pointer and value path helpers', () => {
     expect(removeAtPath(original, '')).toEqual({});
     expect(schemaPointerToValuePath('/properties/profile/properties/name')).toBe('profile.name');
     expect(schemaPointerToValuePath('/items/name')).toBeUndefined();
+    expect(schemaPointerToValuePathTemplate('/properties/contacts/items/properties/email')).toBe(
+      'contacts.*.email',
+    );
+    expect(schemaPointerToValuePathTemplate('/properties/contacts/items/items')).toBe(
+      'contacts.*.*',
+    );
+    expect(schemaPointerToValuePathTemplate('/items/name')).toBeUndefined();
+  });
+
+  it('writes array item paths without converting arrays into objects', () => {
+    const original = {
+      contacts: [
+        { name: 'Ada', channels: [{ address: 'ada@example.test' }] },
+        { name: 'Grace', channels: [] },
+      ],
+    };
+    const updated = setAtPath(original, 'contacts.0.channels.0.address', 'ada@a3s.dev');
+    expect(updated).toEqual({
+      contacts: [
+        { name: 'Ada', channels: [{ address: 'ada@a3s.dev' }] },
+        { name: 'Grace', channels: [] },
+      ],
+    });
+    expect(Array.isArray(updated.contacts)).toBe(true);
+    expect(original).toEqual({
+      contacts: [
+        { name: 'Ada', channels: [{ address: 'ada@example.test' }] },
+        { name: 'Grace', channels: [] },
+      ],
+    });
+  });
+
+  it('handles sparse array writes, removals and invalid array segments safely', () => {
+    expect(setAtPath({}, 'contacts.0.name', 'Ada')).toEqual({ contacts: [{ name: 'Ada' }] });
+    expect(setAtPath({ contacts: [] }, 'contacts.bad.name', 'Ada')).toEqual({ contacts: [] });
+    expect(setAtPath({ contacts: [null] }, 'contacts.0.name', 'Ada')).toEqual({
+      contacts: [{ name: 'Ada' }],
+    });
+    expect(setAtPath({ contacts: [{}] }, 'contacts.0', { name: 'Grace' })).toEqual({
+      contacts: [{ name: 'Grace' }],
+    });
+    expect(setAtPath({ contacts: [] }, 'contacts.bad', 'Ada')).toEqual({ contacts: [] });
+
+    expect(removeAtPath({ contacts: [{ name: 'Ada', role: 'admin' }] }, 'contacts.0.name')).toEqual(
+      { contacts: [{ role: 'admin' }] },
+    );
+    expect(removeAtPath({ contacts: [{ name: 'Ada' }] }, 'contacts.0')).toEqual({
+      contacts: [],
+    });
+    expect(removeAtPath({ contacts: [] }, 'contacts.bad.name')).toEqual({ contacts: [] });
+    expect(removeAtPath({ contacts: [] }, 'contacts.bad')).toEqual({ contacts: [] });
+  });
+
+  it('resolves and matches concrete paths against nested repeater templates', () => {
+    expect(schemaPointerToValuePath('/properties/contacts/items/properties/name')).toBeUndefined();
+    expect(schemaPointerToValuePathTemplate('')).toBeUndefined();
+    expect(resolveValuePathTemplate(undefined, [0])).toBeUndefined();
+    expect(resolveValuePathTemplate('contacts.*.channels.*.address', [2, 1])).toBe(
+      'contacts.2.channels.1.address',
+    );
+    expect(resolveValuePathTemplate('contacts.*.name')).toBeUndefined();
+    expect(matchValuePathTemplate(undefined, 'contacts.0.name')).toBeUndefined();
+    expect(matchValuePathTemplate('contacts.*.name', 'contacts.0')).toBeUndefined();
+    expect(matchValuePathTemplate('contacts.*.name', 'contacts.first.name')).toBeUndefined();
+    expect(matchValuePathTemplate('contacts.*.name', 'recipients.0.name')).toBeUndefined();
+    expect(
+      matchValuePathTemplate('contacts.*.channels.*.address', 'contacts.2.channels.1.address'),
+    ).toEqual([2, 1]);
   });
 });
 

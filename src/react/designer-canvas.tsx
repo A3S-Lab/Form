@@ -1,6 +1,7 @@
 import { type CSSProperties, type DragEvent, type ReactNode, useState } from 'react';
 import type { FormDocument, UiNode } from '../core';
 import { DesignerIcon } from './designer-icons';
+import { isDesignerContainer, schemaBindingForNode, schemaForNode } from './designer-schema';
 import type { FormNodeDefinition, FormNodeRegistry } from './node-registry';
 import { SelectControl } from './select-control';
 
@@ -121,10 +122,10 @@ function CustomCanvasNode(
   },
 ) {
   const Design = props.definition.design;
-  const property = props.node.schemaPath?.replace('/properties/', '');
-  const schema = property ? props.document.schema.properties?.[property] : undefined;
-  const required = Boolean(property && props.document.schema.required?.includes(property));
-  const acceptsChildren = props.node.kind === 'section' || props.node.kind === 'group';
+  const binding = schemaBindingForNode(props.document, props.node);
+  const schema = schemaForNode(props.document, props.node);
+  const required = Boolean(binding?.parentSchema.required?.includes(binding.property));
+  const acceptsChildren = isDesignerContainer(props.document, props.node);
   return (
     <article
       className={`a3s-form-design-custom card${props.selected ? ' is-selected' : ''}`}
@@ -212,12 +213,30 @@ function CanvasNode(
     );
   }
 
+  if (node.kind === 'repeater' && isDesignerContainer(props.document, node)) {
+    return (
+      <fieldset
+        aria-label={node.label ?? node.id}
+        className={`a3s-form-design-container a3s-form-design-repeater-group fieldset${selected ? ' is-selected' : ''}`}
+        data-node-id={node.id}
+        style={style}
+        draggable
+        onDragStart={(event) => beginNodeDrag(event, node.id)}
+      >
+        <ContainerHeading {...props} node={node} selected={selected} />
+        {node.description && <p className="a3s-form-container-description">{node.description}</p>}
+        <p className="a3s-form-repeater-template-note">每一项使用以下字段</p>
+        <CanvasChildren {...props} container={node} ancestry={ancestry} />
+      </fieldset>
+    );
+  }
+
   if (node.kind === 'content') {
     return <ContentNode {...props} node={node} selected={selected} style={style} />;
   }
 
-  const valuePath = node.schemaPath?.replace('/properties/', '');
-  const required = Boolean(valuePath && props.document.schema.required?.includes(valuePath));
+  const binding = schemaBindingForNode(props.document, node);
+  const required = Boolean(binding?.parentSchema.required?.includes(binding.property));
   return (
     <article
       className={`a3s-form-design-field card${selected ? ' is-selected' : ''}`}

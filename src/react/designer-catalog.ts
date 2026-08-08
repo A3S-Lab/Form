@@ -8,6 +8,7 @@ export type DesignerPreset =
   | 'card'
   | 'tabs'
   | 'collapse'
+  | 'repeater-group'
   | 'divider'
   | 'spacer';
 
@@ -138,6 +139,22 @@ export const DESIGNER_CATALOG: readonly DesignerCatalogSection[] = [
         kind: 'field',
         widget: 'switch',
         schema: { type: 'boolean' },
+      },
+      {
+        id: 'repeater-group',
+        label: '重复字段组',
+        description: '可增删和排序的一组字段',
+        glyph: '▤',
+        kind: 'repeater',
+        preset: 'repeater-group',
+        schema: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+          },
+        },
       },
       {
         id: 'repeater',

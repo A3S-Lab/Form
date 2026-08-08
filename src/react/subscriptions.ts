@@ -6,6 +6,7 @@ import {
   getAtPath,
   type JsonObject,
   jsonValuesEqual,
+  resolveValuePathTemplate,
 } from '../core';
 
 export interface SubscribedNodeRenderProps {
@@ -25,7 +26,15 @@ export interface SubscribedNodeRenderProps {
   readOnly?: boolean;
   locale?: string;
   messages: unknown;
+  rowIndices?: readonly number[];
+  rowKeys?: readonly string[];
   suppressHeading?: boolean;
+}
+
+function arraysEqual<T>(left: readonly T[] | undefined, right: readonly T[] | undefined): boolean {
+  if (left === right) return true;
+  if (!left || !right || left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
 }
 
 function valuesAtPathEqual(left: JsonObject, right: JsonObject, path: string): boolean {
@@ -74,18 +83,25 @@ export function subscribedNodePropsEqual(
     left.readOnly !== right.readOnly ||
     left.locale !== right.locale ||
     left.messages !== right.messages ||
+    !arraysEqual(left.rowIndices, right.rowIndices) ||
+    !arraysEqual(left.rowKeys, right.rowKeys) ||
     left.suppressHeading !== right.suppressHeading
   ) {
     return false;
   }
 
   const node = left.plan.nodeById[left.nodeId];
-  const valuePath = node?.valuePath;
+  const valuePath = node?.valuePathTemplate?.includes('*')
+    ? resolveValuePathTemplate(node.valuePathTemplate, left.rowIndices)
+    : node?.valuePath;
   if (!errorsAtPathEqual(left.errorMap, right.errorMap, valuePath)) return false;
   if (valuePath && left.validatingPaths.has(valuePath) !== right.validatingPaths.has(valuePath)) {
     return false;
   }
   const subscriptions = left.plan.nodeSubscriptions?.[left.nodeId];
   if (!subscriptions) return false;
-  return subscriptions.every((path) => valuesAtPathEqual(left.value, right.value, path));
+  return subscriptions.every((path) => {
+    const resolved = resolveValuePathTemplate(path, left.rowIndices);
+    return resolved ? valuesAtPathEqual(left.value, right.value, resolved) : false;
+  });
 }

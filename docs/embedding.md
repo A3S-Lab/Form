@@ -90,6 +90,27 @@ A3S Form owns compilation, synchronous validation, cancellation and stable mappi
 
 Every accepted plan identifies `a3s.dev/form-schema-profile/1`. A workflow host should treat a different `schemaProfile` as an unsupported contract instead of attempting to render it. See [Schema Profile 1](schema-profile-1.md) for the keyword and format boundary.
 
+## Repeatable node parameters
+
+Object arrays render as repeatable field groups when a `repeater` node owns child fields under its item schema. Add, edit, move, and remove operations still emit one complete controlled value through `onChange`. The engine does not add a hidden row ID to that value.
+
+React keeps runtime row keys while the component remains mounted. If the workflow host replaces rows with newly allocated objects, it can derive identity from an existing business key:
+
+```tsx
+const hostAdapter: FormHostAdapter = {
+  identifyRepeaterItem({ node, item }) {
+    if (node.id !== 'routes' || !item || typeof item !== 'object' || Array.isArray(item)) {
+      return undefined;
+    }
+    return typeof item.route === 'string' ? item.route : undefined;
+  },
+};
+```
+
+Use `UiNode.itemKey` only when the form schema intentionally declares that property as a required string. New rows receive a generated value because the document requested one. For workflow configuration that has no business row key, omit `itemKey`; runtime identity or `identifyRepeaterItem` keeps engine metadata out of persisted node parameters.
+
+Nested fields receive concrete paths such as `routes.0.when.equals`. Host errors and field-level asynchronous validation must use those concrete paths. See [Repeatable field groups](repeatable-field-groups.md) for the document shape and current rule/data-source limits.
+
 ## Framework surfaces
 
 React is the reference runtime. Vue and Web Components expose the same host-facing configuration where it applies: controlled values, actions, external errors, locale catalogs, read-only state, host adapters, widget registries, and custom-node registries. The Designer adapters also accept compiler capabilities.

@@ -26,7 +26,11 @@ describe('A3S Workflow node configuration examples', () => {
     expect(workflowFormSeeds.map((seed) => seed.id)).toEqual(
       expectedKinds.map((kind) => `workflow-${kind}-config`),
     );
-    expect(workflowFormSeeds.every((seed) => seed.seedVersion === 3)).toBe(true);
+    expect(
+      workflowFormSeeds.every(
+        (seed) => seed.seedVersion === (seed.id === 'workflow-router-config' ? 4 : 3),
+      ),
+    ).toBe(true);
   });
 
   it('keeps every bundled example compilable with the playground registry', () => {
@@ -50,12 +54,37 @@ describe('A3S Workflow node configuration examples', () => {
       expect(descriptor.defaultConfig).toEqual(expected);
       expect(seed?.document.schema.default).toEqual(expected);
       expect(Object.keys(seed?.document.schema.properties ?? {})).toEqual(Object.keys(expected));
+      const section = seed?.document.ui.nodes.find((node) =>
+        node.children?.includes(`${descriptor.kind}-contract-note`),
+      );
       expect(
-        seed?.document.ui.nodes
-          .filter((node) => node.kind === 'field')
-          .map((node) => node.schemaPath?.replace('/properties/', '')),
+        section?.children
+          ?.slice(1)
+          .map((id) => seed?.document.ui.nodes.find((node) => node.id === id)?.schemaPath)
+          .map((path) => path?.replace('/properties/', '')),
       ).toEqual(Object.keys(expected));
     }
+  });
+
+  it('renders router routes as a metadata-free repeatable field group', () => {
+    const router = workflowFormSeeds.find((seed) => seed.id === 'workflow-router-config');
+    const routes = router?.document.ui.nodes.find(
+      (node) => node.schemaPath === '/properties/routes',
+    );
+    expect(routes).toEqual(
+      expect.objectContaining({
+        kind: 'repeater',
+        children: ['router-route-when-value', 'router-route-when-equals', 'router-route-name'],
+      }),
+    );
+    expect(routes?.itemKey).toBeUndefined();
+    expect(router?.document.schema.properties?.routes?.items?.properties?.when?.default).toEqual({
+      value: '{{input.type}}',
+      equals: 'customer',
+    });
+    expect(router?.document.schema.properties?.routes?.items?.properties).not.toHaveProperty(
+      'rowId',
+    );
   });
 
   it('uses a host-owned searchable catalog for workflow model fields', () => {

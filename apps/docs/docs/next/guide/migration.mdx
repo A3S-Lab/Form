@@ -1,0 +1,21 @@
+# Migration checklist
+
+The `next` runtime closes contracts that v0.1 accepted loosely. Test every stored form before publishing a new revision and digest.
+
+1. Compile each document against Schema Profile 1 and remove unsupported JSON Schema keywords.
+2. Review every `computed` rule; it now participates in controlled values, validation, and actions.
+3. Put remote options behind `resolveDataSource`, with declared dependencies and host-owned credentials.
+4. Put protected business checks behind `validateValue`, using stable issue codes and concrete paths.
+5. Import the scoped Form stylesheet and remove dependencies on global resets.
+6. Keep locale overrides in host state through `a3s.dev/form-locale-catalog/v1`.
+7. Replace object-array JSON editors with [repeatable field groups](/next/guide/repeatable-field-groups) without changing the stored value shape.
+
+Primitive repeaters remain compatible. Object repeaters do not add row metadata by default. Use `identifyRepeaterItem` for host-derived identity, or declare `itemKey` only when the existing business schema owns a required string identifier.
+
+After migration, publish a new form revision and update configuration-mode `FormRef` values explicitly. Existing workflow nodes and in-flight interactions remain pinned to their original revision and digest.
+
+Run the complete release check before publication:
+
+```bash
+bun run check
+```

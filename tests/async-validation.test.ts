@@ -5,7 +5,7 @@ import {
   mapAsyncValidationIssues,
   validateFormValueAsync,
 } from '../src/core';
-import { createDocument } from './fixtures';
+import { createDocument, createObjectRepeaterDocument } from './fixtures';
 
 describe('host-owned asynchronous validation', () => {
   const plan = () => assertCompiled(createDocument());
@@ -173,6 +173,43 @@ describe('host-owned asynchronous validation', () => {
       abortedFailure.signal,
     );
     expect(rejected.status).toBe('cancelled');
+  });
+
+  it('validates a concrete field instance inside an object repeater row', async () => {
+    const repeaterPlan = assertCompiled(createObjectRepeaterDocument());
+    let received: AsyncValidationRequest | undefined;
+    const result = await validateFormValueAsync(
+      repeaterPlan,
+      {
+        recipients: [{ rowId: 'recipient-1', name: 'Ada', email: 'ada@example.test' }],
+      },
+      async (request) => {
+        received = request;
+        return { issues: [{ code: 'reserved', message: 'Use another recipient.' }] };
+      },
+      {
+        scope: {
+          kind: 'field',
+          nodeId: 'recipient-email',
+          path: 'recipients.0.email',
+        },
+        trigger: 'blur',
+      },
+    );
+
+    expect(received?.scope).toEqual({
+      kind: 'field',
+      nodeId: 'recipient-email',
+      path: 'recipients.0.email',
+    });
+    expect(result.status).toBe('invalid');
+    expect(result.asyncErrors).toEqual([
+      {
+        path: 'recipients.0.email',
+        code: 'async.reserved',
+        message: 'Use another recipient.',
+      },
+    ]);
   });
 
   it('accepts an absent validator and enforces the closed issue response shape', async () => {

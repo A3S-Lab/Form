@@ -90,6 +90,15 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 
 **Outcome:** product teams can author mainstream operational forms without raw JSON or application-specific forks.
 
+### Current development baseline (unreleased)
+
+- The compiler resolves object-array fields to concrete row paths and supports arbitrarily nested repeatable groups.
+- React rows can be added, removed, and reordered with `minItems` and `maxItems` enforcement, concrete field errors, and responsive single-column fallback.
+- Runtime-owned React keys preserve local field state without changing the controlled value. Documents may declare a required string `itemKey`, or hosts may derive identity with `identifyRepeaterItem`.
+- Designer treats an object repeater as a real container: fields can be authored inside it, moved across scopes, duplicated with the complete item schema, and previewed without raw JSON editing.
+- The Router workflow-node sample uses a metadata-free repeatable group for `routes`, proving the Dify-like embedding path with ordinary node configuration values.
+- Row-scoped computed and validation expressions, row-scoped data-source dependency templates, data grids, matrices, and true wizards remain planned work.
+
 ### Planned capabilities
 
 - First-class nested objects, nested arrays, repeatable field groups, data grids, edit grids, matrices, stable row identity, and row reordering.

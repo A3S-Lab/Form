@@ -79,8 +79,8 @@ A basic schema renderer only draws inputs. A3S Form gives design, preview, runti
 
 | Surface | Implemented capabilities |
 | --- | --- |
-| **Form Designer** | Published A3S UI component contracts, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, focused preview, responsive component/canvas/settings panels, undo/redo, save feedback, and compiler diagnostics |
-| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, field-level subscriptions, localized validation summaries, cancellable host validation, async action states, host-resolved option sources, custom nodes, and primitive repeaters |
+| **Form Designer** | Published A3S UI component contracts, field catalog, structure tree, grid/column/tab/collapse layouts, nested repeatable field groups, cross-container drag and drop, custom nodes, focused preview, responsive component/canvas/settings panels, undo/redo, save feedback, and compiler diagnostics |
+| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, field-level subscriptions, localized validation summaries, cancellable host validation, async action states, host-resolved option sources, custom nodes, and primitive or nested object repeaters |
 | **Form Compiler** | Input boundaries, Schema Profile 1 validation, rule and node dependency indexes, cycle detection, capability checks, canonical SHA-256, immutable `FormPlan`, and a cancellable Worker |
 | **Agent Interface** | JSON CLI, revision-bound `FormPatch`, in-Designer JSON preflight and conflict feedback, `$a3s-form` skill, machine-readable diagnostics, and atomic changes |
 
@@ -102,7 +102,9 @@ Authoring and runtime behavior:
 - Draft actions receive the current controlled value without being blocked by required-field validation. Submit actions run synchronous and host-owned asynchronous validation, show a summary, and focus the first invalid field.
 
 > [!IMPORTANT]
-> The v0.1 contract is a foundation, not a claim of full JSON Schema or enterprise-form parity. The unreleased `next` baseline now covers Schema Profile 1, computed rules, host-neutral embedding, async validation, dynamic data sources, field subscriptions, runtime locale catalogs, and large-form budgets. Complex repeatable groups and draft/release collaboration remain planned work. See the [product roadmap](ROADMAP.md) for scope and release gates.
+> The v0.1 contract is a foundation, not a claim of full JSON Schema or enterprise-form parity. The unreleased `next` baseline now covers Schema Profile 1, computed rules, host-neutral embedding, async validation, dynamic data sources, field subscriptions, runtime locale catalogs, large-form budgets, and nested repeatable field groups. Data grids, true wizards, and draft/release collaboration remain planned work. See the [product roadmap](ROADMAP.md) for scope and release gates.
+
+Existing integrations should follow the [v0.1-to-next migration checklist](docs/migration-v0.1-to-next.md) before publishing a new form revision or digest.
 
 ### Minimal React embedding
 
@@ -183,6 +185,8 @@ The development compiler enforces [A3S Form Schema Profile 1](docs/schema-profil
 
 [Performance budgets](docs/performance.md) cover compilation, validation, incremental computed-rule updates, and server rendering at 100, 500, and 1,000 nodes. The same benchmark runs in CI.
 
+[Repeatable field groups](docs/repeatable-field-groups.md) bind object arrays to real row templates. Rows can be added, removed, and reordered without serializing runtime keys into workflow configuration. A host may derive stable identity from business data through `identifyRepeaterItem`; declaring `itemKey` remains an explicit document choice.
+
 <a id="embedding"></a>
 
 ## Embedding Boundaries for A3S Cloud and Workflow
@@ -190,7 +194,7 @@ The development compiler enforces [A3S Form Schema Profile 1](docs/schema-profil
 | Integration | Contract |
 | --- | --- |
 | **A3S Cloud** | `createA3SCloudFormAdapter` injects organization/project/environment context, data sources, async validation, and actions. Cloud retains ownership of authorization, storage, secrets, and audit logs. |
-| **Workflow node configuration** | `createWorkflowNodeConfiguration` describes a Dify-like node settings form without a platform dependency. `validateWorkflowNodeConfiguration` accepts the value only after its configuration-mode `FormRef` matches the published revision and digest. |
+| **Workflow node configuration** | `createWorkflowNodeConfiguration` describes a Dify-like node settings form without a platform dependency. Controlled scalar, object, and repeated values remain plain node configuration; `validateWorkflowNodeConfiguration` accepts them only after the configuration-mode `FormRef` matches the published revision and digest. |
 | **Durable human interaction** | A run emits an `interaction` FormRef and pauses. It resumes only after the submission matches the original revision/digest and passes schema validation. |
 | **A3S Code agentic nodes** | An agent may request governed form interaction but receives no open browser, production credentials, or unbounded action channel. |
 
@@ -249,7 +253,7 @@ A3S Form is planned as five coordinated product layers: deterministic Form Core,
 | --- | --- |
 | **v0.1 · current** | Prove the versioned document, deterministic compiler, controlled runtime, visual Designer, host adapters, and governed patch model. |
 | **v0.2 · runtime integrity** | Lock down host-neutral embedding, schema and computed semantics, async validation, data sources, localization, and incremental performance. |
-| **v0.3 · complex forms** | Add nested data, repeatable groups, grids, matrices, true wizards, a broader field kit, and visual rule/integration editors. |
+| **v0.3 · complex forms** | Nested object repeaters and stable row reordering are in development; data grids, matrices, true wizards, a broader field kit, and visual rule/integration editors follow. |
 | **v0.4 · governance** | Add draft/release history, diff and rollback, approvals, collaboration contracts, offline sync, audit, policy, and migration tools. |
 | **v1.0 · AI-native production** | Stabilize contracts and deliver inspect → patch → simulate → test → approve → publish workflows across people, agents, Cloud, and Workflow. |
 
@@ -263,12 +267,12 @@ Current full runtime coverage:
 
 | Metric | Coverage |
 | --- | ---: |
-| Statements | **97.45%** |
-| Branches | **95.09%** |
-| Functions | **97.24%** |
-| Lines | **98.77%** |
+| Statements | **97.63%** |
+| Branches | **95.39%** |
+| Functions | **97.21%** |
+| Lines | **98.84%** |
 
-- All 233 unit and cross-framework integration tests pass.
+- All 266 unit and cross-framework integration tests pass.
 - The repository includes local A3S Test flows covering Designer → focused Preview → validation → action, host-owned field validation, responsive mobile authoring, browser-local persistence, and validated JSON import.
 - A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
 - CI installs locked dependencies and runs linting, type checks, coverage gates, 100/500/1,000-node performance budgets, package/CLI builds, documentation builds, and the Playground build.

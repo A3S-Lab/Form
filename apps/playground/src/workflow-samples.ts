@@ -23,6 +23,8 @@ export type WorkflowNodeKind =
 
 interface WorkflowFieldSpec {
   key: string;
+  kind?: 'field' | 'repeater';
+  schemaPath?: string;
   label: string;
   widget?: string;
   description?: string;
@@ -31,6 +33,7 @@ interface WorkflowFieldSpec {
   options?: readonly UiOption[];
   readOnly?: boolean;
   dataSource?: string;
+  children?: readonly WorkflowFieldSpec[];
 }
 
 export interface WorkflowNodeDescriptorSnapshot {
@@ -64,23 +67,41 @@ function fieldId(kind: WorkflowNodeKind, key: string): string {
   return `${kind}-${key.replaceAll('_', '-')}`;
 }
 
-function createWorkflowForm(spec: WorkflowNodeDescriptorSnapshot): FormDocument {
-  const rootId = `${spec.kind}-root`;
-  const sectionId = `${spec.kind}-configuration`;
-  const noteId = `${spec.kind}-contract-note`;
-  const fieldNodes: UiNode[] = spec.fields.map((field) => ({
-    id: fieldId(spec.kind, field.key),
-    kind: 'field',
+function createWorkflowFieldNodes(
+  kind: WorkflowNodeKind,
+  field: WorkflowFieldSpec,
+  parentSchemaPath?: string,
+): UiNode[] {
+  const id = fieldId(kind, field.key);
+  const schemaPath =
+    field.schemaPath ??
+    (parentSchemaPath
+      ? `${parentSchemaPath}/items/properties/${field.key}`
+      : `/properties/${field.key}`);
+  const children = field.children ?? [];
+  const node: UiNode = {
+    id,
+    kind: field.kind ?? 'field',
     label: field.label,
     description: field.description,
-    schemaPath: `/properties/${field.key}`,
-    widget: field.widget ?? 'text',
+    schemaPath,
+    widget: field.kind === 'repeater' ? undefined : (field.widget ?? 'text'),
     placeholder: field.placeholder,
     width: field.width ?? 12,
     options: field.options ? [...field.options] : undefined,
     dataSource: field.dataSource,
     readOnly: field.readOnly,
-  }));
+    children:
+      field.kind === 'repeater' ? children.map((child) => fieldId(kind, child.key)) : undefined,
+  };
+  return [node, ...children.flatMap((child) => createWorkflowFieldNodes(kind, child, schemaPath))];
+}
+
+function createWorkflowForm(spec: WorkflowNodeDescriptorSnapshot): FormDocument {
+  const rootId = `${spec.kind}-root`;
+  const sectionId = `${spec.kind}-configuration`;
+  const noteId = `${spec.kind}-contract-note`;
+  const fieldNodes = spec.fields.flatMap((field) => createWorkflowFieldNodes(spec.kind, field));
 
   return {
     kind: 'a3s.form',
@@ -125,7 +146,7 @@ function createWorkflowForm(spec: WorkflowNodeDescriptorSnapshot): FormDocument 
           columns: 12,
           gap: 16,
           width: 12,
-          children: [noteId, ...fieldNodes.map((field) => field.id)],
+          children: [noteId, ...spec.fields.map((field) => fieldId(spec.kind, field.key))],
         },
         {
           id: noteId,
@@ -353,17 +374,24 @@ export const workflowNodeDescriptors: readonly WorkflowNodeDescriptorSnapshot[] 
         type: 'array',
         title: '分支规则',
         default: [],
+        maxItems: 12,
         items: {
           type: 'object',
           properties: {
             when: {
               type: 'object',
-              properties: { value: {}, equals: {} },
-              required: ['value'],
+              default: { value: '{{input.type}}', equals: 'customer' },
+              properties: {
+                value: { title: '条件值', default: '{{input.type}}' },
+                equals: { title: '匹配值', default: 'customer' },
+              },
+              required: ['value', 'equals'],
+              additionalProperties: false,
             },
-            route: { type: 'string', minLength: 1 },
+            route: { type: 'string', minLength: 1, default: 'customer' },
           },
           required: ['when', 'route'],
+          additionalProperties: false,
         },
       },
       default: { type: 'string', title: '默认分支', minLength: 1, default: 'default' },
@@ -372,9 +400,34 @@ export const workflowNodeDescriptors: readonly WorkflowNodeDescriptorSnapshot[] 
     fields: [
       {
         key: 'routes',
+        kind: 'repeater',
         label: '分支规则（routes）',
-        widget: 'a3s.json',
-        description: '默认值：[]',
+        description: '按顺序匹配条件；不命中时使用默认分支。',
+        children: [
+          {
+            key: 'route-when-value',
+            schemaPath: '/properties/routes/items/properties/when/properties/value',
+            label: '条件值（when.value）',
+            widget: 'a3s.json',
+            description: '支持工作流模板变量和 JSON 标量。',
+            width: 4,
+          },
+          {
+            key: 'route-when-equals',
+            schemaPath: '/properties/routes/items/properties/when/properties/equals',
+            label: '匹配值（when.equals）',
+            widget: 'a3s.json',
+            description: '与条件值进行结构化相等比较。',
+            width: 4,
+          },
+          {
+            key: 'route-name',
+            schemaPath: '/properties/routes/items/properties/route',
+            label: '目标分支（route）',
+            placeholder: 'customer',
+            width: 4,
+          },
+        ],
       },
       {
         key: 'default',
@@ -489,7 +542,7 @@ export const workflowNodeKinds: readonly WorkflowNodeKind[] = workflowNodeDescri
 export const workflowFormSeeds: readonly PlaygroundWorkspaceSeed[] = workflowNodeDescriptors.map(
   (descriptor) => ({
     id: `workflow-${descriptor.kind}-config`,
-    seedVersion: 3,
+    seedVersion: descriptor.kind === 'router' ? 4 : 3,
     document: createWorkflowForm(descriptor),
   }),
 );

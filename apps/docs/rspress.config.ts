@@ -48,9 +48,13 @@ export default defineConfig({
         { text: 'Product roadmap', link: '/next/roadmap' },
         { text: 'Development baseline', link: '/next/guide/' },
         { text: 'Workflow-node embedding', link: '/next/guide/workflow-node-embedding' },
+        { text: 'Repeatable field groups', link: '/next/guide/repeatable-field-groups' },
         { text: 'Schema Profile 1', link: '/next/guide/schema-profile-1' },
         { text: 'Computed rules', link: '/next/guide/computed-rules' },
         { text: 'Async validation', link: '/next/guide/async-validation' },
+        { text: 'Data sources', link: '/next/guide/data-sources' },
+        { text: 'Localization and performance', link: '/next/guide/localization-performance' },
+        { text: 'Migration checklist', link: '/next/guide/migration' },
       ],
     },
     editLink: {

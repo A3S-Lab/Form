@@ -1,6 +1,6 @@
 import { digestDocument, sealDocument } from './canonical';
 import { analyzeExpression } from './expression';
-import { getAtPointer, schemaPointerToValuePath } from './pointer';
+import { getAtPointer, schemaPointerToValuePathTemplate } from './pointer';
 import { A3S_FORM_SCHEMA_PROFILE_1_ID, inspectSchemaProfile } from './schema-profile';
 import type {
   CompiledNode,
@@ -270,6 +270,7 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
     }
     let schema: import('./types').JsonSchema | undefined;
     let valuePath: string | undefined;
+    let valuePathTemplate: string | undefined;
     if (node.kind === 'field' || node.kind === 'repeater') {
       if (!node.schemaPath)
         diagnostics.push(
@@ -278,8 +279,9 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
       else {
         try {
           const resolvedSchema = getAtPointer(document.schema, node.schemaPath);
-          valuePath = schemaPointerToValuePath(node.schemaPath);
-          if (!isRecord(resolvedSchema) || !valuePath) {
+          valuePathTemplate = schemaPointerToValuePathTemplate(node.schemaPath);
+          valuePath = valuePathTemplate?.includes('*') ? undefined : valuePathTemplate;
+          if (!isRecord(resolvedSchema) || !valuePathTemplate) {
             diagnostics.push(
               diagnostic(
                 'node.schema_reference',
@@ -299,7 +301,13 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
         }
       }
     }
-    nodes.set(node.id, { ...(node as UiNode), schema, valuePath, depth: 0 });
+    nodes.set(node.id, {
+      ...(node as UiNode),
+      schema,
+      valuePath,
+      valuePathTemplate,
+      depth: 0,
+    });
   }
   if (!nodes.has(document.ui.root)) {
     diagnostics.push(diagnostic('ui.root_reference', 'ui.root 引用了不存在的节点。', '/ui/root'));
@@ -338,6 +346,101 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
           ),
         );
     }
+  }
+  const parentsByChild = new Map<string, Set<string>>();
+  for (const node of nodes.values()) {
+    for (const child of node.children ?? []) {
+      const parents = parentsByChild.get(child) ?? new Set<string>();
+      parents.add(node.id);
+      parentsByChild.set(child, parents);
+    }
+  }
+  for (const [index, sourceNode] of sourceNodes.entries()) {
+    if (!isRecord(sourceNode) || sourceNode.kind !== 'repeater') continue;
+    const node = nodes.get(sourceNode.id as string);
+    if (!node?.schema) continue;
+    if (node.schema.type !== 'array') {
+      diagnostics.push(
+        diagnostic(
+          'repeater.schema_type',
+          `Repeater ${node.id} must bind to an array schema.`,
+          `/ui/nodes/${index}/schemaPath`,
+        ),
+      );
+      continue;
+    }
+    if ((node.children?.length ?? 0) > 0 && node.schema.items?.type !== 'object') {
+      diagnostics.push(
+        diagnostic(
+          'repeater.items_type',
+          `Repeater ${node.id} with child fields must use an object item schema.`,
+          `/ui/nodes/${index}/children`,
+        ),
+      );
+    }
+    if (node.itemKey !== undefined) {
+      const keySchema = node.schema.items?.properties?.[node.itemKey];
+      if (
+        typeof node.itemKey !== 'string' ||
+        node.itemKey.length === 0 ||
+        node.itemKey.includes('.') ||
+        keySchema?.type !== 'string' ||
+        !node.schema.items?.required?.includes(node.itemKey)
+      ) {
+        diagnostics.push(
+          diagnostic(
+            'repeater.item_key',
+            `Repeater ${node.id} itemKey must reference a required string property in its item schema.`,
+            `/ui/nodes/${index}/itemKey`,
+          ),
+        );
+      }
+    }
+  }
+  for (const node of nodes.values()) {
+    const template = node.valuePathTemplate;
+    if (!template?.includes('*')) {
+      node.repeaterAncestors = [];
+      continue;
+    }
+    const ancestors: string[] = [];
+    const visited = new Set<string>([node.id]);
+    let currentId = node.id;
+    let invalidScope = false;
+    while (true) {
+      const parents = [...(parentsByChild.get(currentId) ?? [])];
+      if (parents.length === 0) break;
+      if (parents.length !== 1 || visited.has(parents[0])) {
+        invalidScope = true;
+        break;
+      }
+      const parentId = parents[0];
+      visited.add(parentId);
+      const parent = nodes.get(parentId);
+      if (parent?.kind === 'repeater') ancestors.unshift(parent.id);
+      currentId = parentId;
+    }
+    const wildcardPositions = template
+      .split('.')
+      .flatMap((segment, index) => (segment === '*' ? [index] : []));
+    if (ancestors.length !== wildcardPositions.length) invalidScope = true;
+    for (const [index, ancestorId] of ancestors.entries()) {
+      const repeaterTemplate = nodes.get(ancestorId)?.valuePathTemplate;
+      const expectedPrefix = template.split('.').slice(0, wildcardPositions[index]).join('.');
+      if (!repeaterTemplate || repeaterTemplate !== expectedPrefix) invalidScope = true;
+    }
+    if (invalidScope) {
+      const sourceIndex = sourceNodes.findIndex(
+        (candidate) => isRecord(candidate) && candidate.id === node.id,
+      );
+      diagnostics.push(
+        diagnostic(
+          'node.dynamic_scope',
+          `Node ${node.id} must be nested under the repeaters declared by its schemaPath.`,
+          `/ui/nodes/${sourceIndex}/schemaPath`,
+        ),
+      );
+    } else node.repeaterAncestors = ancestors;
   }
   const dataSourceIds = new Set<string>();
   for (const [index, source] of (document.dataSources ?? []).entries()) {
@@ -610,6 +713,18 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
       }
       computedTargets.add(rule.target);
     }
+    if (
+      (rule.kind === 'computed' || rule.kind === 'validate') &&
+      targetNode?.valuePathTemplate?.includes('*')
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'rule.dynamic_target',
+          `Rule ${rule.id} cannot target a repeater item field until it declares row scope.`,
+          `/rules/${index}/target`,
+        ),
+      );
+    }
     try {
       const analysis = analyzeExpression(rule.expression);
       for (const fieldPath of analysis.fieldPaths) {
@@ -654,6 +769,8 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
       ...item,
       schema: compiled.schema,
       valuePath: compiled.valuePath,
+      valuePathTemplate: compiled.valuePathTemplate,
+      repeaterAncestors: compiled.repeaterAncestors,
       depth: compiled.depth,
     };
   });
@@ -662,7 +779,7 @@ export function compileForm(input: unknown, options: CompileOptions = {}): Compi
   const nodeSubscriptions = Object.fromEntries(
     normalizedNodes.map((node) => {
       const paths = new Set<string>();
-      if (node.valuePath) paths.add(node.valuePath);
+      if (node.valuePathTemplate) paths.add(node.valuePathTemplate);
       for (const rule of normalized.rules ?? []) {
         if (rule.target !== node.id) continue;
         for (const path of ruleDependencies[rule.id] ?? []) paths.add(path);

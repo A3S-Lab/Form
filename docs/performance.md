@@ -15,7 +15,7 @@ Runtime updates use two compiled indexes:
 - `ruleDependencies` caches the exact value paths read by every rule;
 - `nodeSubscriptions` combines a field's own value path, targeted rule paths, and declared data-source dependencies.
 
-Computed rules reuse cached outputs when their dependency snapshots match. React fields and primitive repeaters skip parent-driven renders when their subscribed values, errors, validation state, host adapter, locale, and registries are unchanged. Layout nodes continue to render so changed props reach subscribed descendants. Custom node-registry renderers receive the entire form value and remain conservatively unmemoized until they declare an explicit dependency contract.
+Computed rules reuse cached outputs when their dependency snapshots match. React fields and repeaters skip parent-driven renders when their subscribed values, errors, validation state, host adapter, locale, and registries are unchanged. Dynamic templates such as `routes.*.match` resolve against the current row indices before comparison, so editing one row does not subscribe every repeated field to every sibling value. Layout nodes continue to render so changed props reach subscribed descendants. Custom node-registry renderers receive the entire form value and remain conservatively unmemoized until they declare an explicit dependency contract.
 
 Run the gate after the package build:
 

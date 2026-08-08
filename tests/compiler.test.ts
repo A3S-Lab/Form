@@ -6,7 +6,11 @@ import {
   type FormDocument,
   sealDocument,
 } from '../src/core';
-import { createDocument } from './fixtures';
+import {
+  createDocument,
+  createNestedRepeaterDocument,
+  createObjectRepeaterDocument,
+} from './fixtures';
 
 function codes(result: ReturnType<typeof compileForm>): string[] {
   return result.diagnostics.map((item) => item.code);
@@ -40,6 +44,83 @@ describe('form compiler', () => {
   it('supports asserted plans and reports assertion failures', () => {
     expect(assertCompiled(createDocument()).root).toBe('root');
     expect(() => assertCompiled({})).toThrow('/kind');
+  });
+
+  it('compiles object repeater children into row-scoped value templates', () => {
+    const plan = assertCompiled(createObjectRepeaterDocument());
+
+    expect(plan.nodeById.recipients.valuePath).toBe('recipients');
+    expect(plan.nodeById.recipients.valuePathTemplate).toBe('recipients');
+    expect(plan.nodeById['recipient-name'].valuePath).toBeUndefined();
+    expect(plan.nodeById['recipient-name'].valuePathTemplate).toBe('recipients.*.name');
+    expect(plan.nodeById['recipient-name'].repeaterAncestors).toEqual(['recipients']);
+    expect(plan.nodeSubscriptions['recipient-name']).toEqual(['recipients.*.name']);
+  });
+
+  it('rejects invalid object repeater bindings and unstable item keys', () => {
+    const nonArray = createObjectRepeaterDocument();
+    if (!nonArray.schema.properties) throw new Error('Missing root properties.');
+    nonArray.schema.properties.recipients = { type: 'string' };
+    expect(codes(compileForm(nonArray))).toContain('repeater.schema_type');
+
+    const missingSchema = createObjectRepeaterDocument();
+    const missingRepeater = missingSchema.ui.nodes.find((node) => node.id === 'recipients');
+    if (!missingRepeater) throw new Error('Missing recipient repeater node.');
+    missingRepeater.schemaPath = '/properties/missing';
+    expect(codes(compileForm(missingSchema))).toContain('node.schema_reference');
+
+    const primitiveChildren = createObjectRepeaterDocument();
+    const recipients = primitiveChildren.schema.properties?.recipients;
+    if (!recipients) throw new Error('Missing recipients schema.');
+    recipients.items = { type: 'string' };
+    expect(codes(compileForm(primitiveChildren))).toContain('repeater.items_type');
+
+    const missingItemKey = createObjectRepeaterDocument();
+    const itemSchema = missingItemKey.schema.properties?.recipients?.items;
+    if (!itemSchema?.properties) throw new Error('Missing recipient item schema.');
+    delete itemSchema.properties.rowId;
+    expect(codes(compileForm(missingItemKey))).toContain('repeater.item_key');
+
+    const orphan = createObjectRepeaterDocument();
+    const root = orphan.ui.nodes.find((node) => node.id === 'root');
+    const repeater = orphan.ui.nodes.find((node) => node.id === 'recipients');
+    if (!root || !repeater) throw new Error('Missing repeater fixture nodes.');
+    repeater.children = repeater.children?.filter((id) => id !== 'recipient-email');
+    root.children?.push('recipient-email');
+    expect(codes(compileForm(orphan))).toContain('node.dynamic_scope');
+
+    const multipleParents = createObjectRepeaterDocument();
+    multipleParents.ui.nodes[0].children?.push('recipient-name');
+    expect(codes(compileForm(multipleParents))).toContain('node.dynamic_scope');
+
+    const wrongRepeater = createObjectRepeaterDocument();
+    if (!wrongRepeater.schema.properties) throw new Error('Missing root properties.');
+    wrongRepeater.schema.properties.others = {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { name: { type: 'string' } },
+        additionalProperties: false,
+      },
+    };
+    const nestedName = wrongRepeater.ui.nodes.find((node) => node.id === 'recipient-name');
+    if (!nestedName) throw new Error('Missing nested name node.');
+    nestedName.schemaPath = '/properties/others/items/properties/name';
+    expect(codes(compileForm(wrongRepeater))).toContain('node.dynamic_scope');
+  });
+
+  it('tracks nested repeater scopes from outer to inner rows', () => {
+    const plan = assertCompiled(createNestedRepeaterDocument());
+
+    expect(plan.nodeById['recipient-channels'].valuePathTemplate).toBe('recipients.*.channels');
+    expect(plan.nodeById['recipient-channels'].repeaterAncestors).toEqual(['recipients']);
+    expect(plan.nodeById['channel-address'].valuePathTemplate).toBe(
+      'recipients.*.channels.*.address',
+    );
+    expect(plan.nodeById['channel-address'].repeaterAncestors).toEqual([
+      'recipients',
+      'recipient-channels',
+    ]);
   });
 
   it.each([
@@ -213,11 +294,23 @@ describe('form compiler', () => {
   });
 
   it('normalizes bounded data-source orchestration defaults', () => {
-    const result = compileForm(createDocument());
+    const document = createDocument();
+    if (!document.dataSources) throw new Error('Missing fixture data source.');
+    document.dataSources[0].parameters = {
+      nil: null,
+      list: [true, 1, 'model'],
+      nested: { enabled: false },
+    };
+    const result = compileForm(document);
+    expect(result.ok).toBe(true);
     expect(result.plan?.dataSources[0]).toEqual({
       id: 'roles',
       registryKey: 'test.roles',
-      parameters: {},
+      parameters: {
+        nil: null,
+        list: [true, 1, 'model'],
+        nested: { enabled: false },
+      },
       dependencies: [],
       trigger: 'mount',
       searchable: false,
@@ -286,6 +379,25 @@ describe('form compiler', () => {
       },
     ];
     expect(codes(compileForm(dependencyCycle))).toContain('rules.cycle');
+
+    const dynamicTargets = createObjectRepeaterDocument();
+    dynamicTargets.rules = [
+      {
+        id: 'derive-recipient-name',
+        target: 'recipient-name',
+        kind: 'computed',
+        expression: { op: 'literal', value: 'Ada' },
+      },
+      {
+        id: 'validate-recipient-email',
+        target: 'recipient-email',
+        kind: 'validate',
+        expression: { op: 'literal', value: true },
+      },
+    ];
+    expect(
+      codes(compileForm(dynamicTargets)).filter((code) => code === 'rule.dynamic_target'),
+    ).toHaveLength(2);
   });
 
   it('exposes conservative default limits', () => {

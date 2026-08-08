@@ -33,6 +33,8 @@ export interface FormNodeRenderProps {
   id: string;
   node: CompiledNode;
   plan: FormPlan;
+  valuePath?: string;
+  rowIndices: readonly number[];
   value: JsonValue | undefined;
   formValue: JsonObject;
   messages: Readonly<FormLocaleMessages>;

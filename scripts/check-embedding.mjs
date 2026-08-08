@@ -90,10 +90,26 @@ function isInsideKeyframes(rule) {
 
 const violations = [];
 const root = postcss.parse(stylesheet, { from: stylesheetPath });
+let ruleOrder = 0;
+const responsiveOrder = new Map();
+const baseOrder = new Map();
+const responsiveSelectors = new Set(['.a3s-form-grid > *', '.a3s-form-repeater-row-grid > *']);
 root.walkRules((rule) => {
+  ruleOrder += 1;
   if (isInsideKeyframes(rule)) return;
   for (const selector of splitTopLevelSelectors(rule.selector)) {
     if (!selector.startsWith('.a3s-form-')) violations.push(selector);
+    if (!responsiveSelectors.has(selector)) continue;
+    const container = rule.parent;
+    if (
+      container?.type === 'atrule' &&
+      container.name === 'container' &&
+      container.params.includes('a3s-form-renderer')
+    ) {
+      responsiveOrder.set(selector, ruleOrder);
+    } else {
+      baseOrder.set(selector, ruleOrder);
+    }
   }
 });
 
@@ -102,6 +118,18 @@ if (/\/\*!\s*tailwindcss\b/i.test(stylesheet)) violations.push('Tailwind preflig
 if (violations.length > 0) {
   throw new Error(
     `Embedding CSS contains host-global selectors: ${[...new Set(violations)].slice(0, 8).join(', ')}. Keep every rule in the a3s-form-* namespace.`,
+  );
+}
+
+const staleResponsiveRules = [...responsiveSelectors].filter(
+  (selector) =>
+    !responsiveOrder.has(selector) ||
+    !baseOrder.has(selector) ||
+    (responsiveOrder.get(selector) ?? -1) <= (baseOrder.get(selector) ?? -1),
+);
+if (staleResponsiveRules.length > 0) {
+  throw new Error(
+    `Embedding CSS places compact renderer overrides before their base rules: ${staleResponsiveRules.join(', ')}. Keep the container-query overrides later in the cascade.`,
   );
 }
 

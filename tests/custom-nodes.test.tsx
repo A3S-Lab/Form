@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { playgroundNodeRegistry } from '../apps/playground/src/custom-nodes';
 import { sampleForm } from '../apps/playground/src/sample';
@@ -164,6 +164,25 @@ function WorkflowJsonHarness() {
   );
 }
 
+function WorkflowRouterHarness() {
+  const router = workflowFormSeeds.find((seed) => seed.id === 'workflow-router-config');
+  if (!router) throw new Error('Missing router node configuration example.');
+  const [document, setDocument] = useState<FormDocument>(() => structuredClone(router.document));
+  const [value, setValue] = useState<JsonObject>({ routes: [], default: 'default' });
+  return (
+    <>
+      <FormDesigner
+        document={document}
+        onChange={setDocument}
+        value={value}
+        onValueChange={setValue}
+        nodeRegistry={playgroundNodeRegistry}
+      />
+      <output data-testid="workflow-router-value">{JSON.stringify(value)}</output>
+    </>
+  );
+}
+
 describe('custom form nodes', () => {
   it('adds the Playground rating extension to the product sample', () => {
     let changed: FormDocument | undefined;
@@ -205,6 +224,29 @@ describe('custom form nodes', () => {
 
     fireEvent.change(editor, { target: { value: '{"message":"已转换"}' } });
     expect(screen.getByTestId('workflow-json-value').textContent).toContain('已转换');
+  });
+
+  it('edits router branches through a repeatable workflow-node field group', () => {
+    render(<WorkflowRouterHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '预览' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加一项' }));
+    const row = screen.getByRole('group', { name: '分支规则（routes）第 1 项' });
+    fireEvent.change(screen.getByLabelText('条件值（when.value）'), {
+      target: { value: '"{{input.segment}}"' },
+    });
+    fireEvent.change(screen.getByLabelText('匹配值（when.equals）'), {
+      target: { value: '"enterprise"' },
+    });
+    fireEvent.change(screen.getByLabelText('目标分支（route）'), {
+      target: { value: 'enterprise' },
+    });
+
+    expect(within(row).getByLabelText('目标分支（route）')).toBeTruthy();
+    expect(screen.getByTestId('workflow-router-value').textContent).toContain(
+      '"routes":[{"when":{"value":"{{input.segment}}","equals":"enterprise"},"route":"enterprise"}]',
+    );
+    expect(screen.getByTestId('workflow-router-value').textContent).not.toContain('rowId');
   });
 
   it('registers catalog, design, inspector and runtime behavior as one extension', () => {

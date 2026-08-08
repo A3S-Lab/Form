@@ -1,9 +1,11 @@
 [
   "index",
   "workflow-node-embedding",
+  "repeatable-field-groups",
   "schema-profile-1",
   "computed-rules",
   "async-validation",
   "data-sources",
-  "localization-performance"
+  "localization-performance",
+  "migration"
 ]

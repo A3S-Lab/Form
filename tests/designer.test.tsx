@@ -528,6 +528,129 @@ describe('React FormDesigner', () => {
     expect(screen.getByText('补充资料')).toBeTruthy();
   });
 
+  it('authors object repeater templates with nested field schemas', () => {
+    render(<DesignerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '选择基础信息' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加重复字段组' }));
+
+    let document = currentDocument();
+    const repeater = document.ui.nodes.find(
+      (node) =>
+        node.kind === 'repeater' &&
+        node.schemaPath &&
+        document.schema.properties?.[node.schemaPath.split('/').at(-1) as string]?.items?.type ===
+          'object',
+    );
+    expect(repeater).toBeTruthy();
+    const repeaterProperty = repeater?.schemaPath?.replace('/properties/', '') as string;
+    expect(document.schema.properties?.[repeaterProperty]?.items?.type).toBe('object');
+
+    fireEvent.click(screen.getByRole('button', { name: '添加单行文本字段' }));
+    fireEvent.change(screen.getByLabelText('字段标题'), { target: { value: '联系人姓名' } });
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
+    fireEvent.click(screen.getByRole('switch', { name: '必填字段' }));
+
+    document = currentDocument();
+    const updatedRepeater = document.ui.nodes.find((node) => node.id === repeater?.id);
+    const child = document.ui.nodes.find((node) => updatedRepeater?.children?.includes(node.id));
+    expect(child?.schemaPath).toMatch(
+      new RegExp(`^/properties/${repeaterProperty}/items/properties/`),
+    );
+    const childProperty = child?.schemaPath?.split('/').at(-1) as string;
+    const itemSchema = document.schema.properties?.[repeaterProperty]?.items;
+    expect(itemSchema?.properties?.[childProperty]?.title).toBe('单行文本');
+    expect(itemSchema?.required).toContain(childProperty);
+    expect(compileForm(document).ok).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: '预览' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加一项' }));
+    expect(screen.getByLabelText('联系人姓名')).toBeTruthy();
+  });
+
+  it('edits repeatable-group limits through the validation inspector', () => {
+    render(<DesignerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '选择基础信息' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加重复字段组' }));
+    let document = currentDocument();
+    const repeater = document.ui.nodes.find(
+      (node) =>
+        node.kind === 'repeater' &&
+        node.schemaPath &&
+        document.schema.properties?.[node.schemaPath.split('/').at(-1) as string]?.items?.type ===
+          'object',
+    );
+    if (!repeater?.schemaPath) throw new Error('Missing authored repeater.');
+
+    fireEvent.click(screen.getByRole('button', { name: repeater.label }));
+    fireEvent.click(screen.getByRole('tab', { name: '校验' }));
+    fireEvent.change(screen.getByLabelText('最少项目数'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('最多项目数'), { target: { value: '4' } });
+
+    document = currentDocument();
+    const schema = document.schema.properties?.[repeater.schemaPath.split('/').at(-1) as string];
+    expect(schema?.minItems).toBe(1);
+    expect(schema?.maxItems).toBe(4);
+    expect(compileForm(document).ok).toBe(true);
+
+    fireEvent.change(screen.getByLabelText('最少项目数'), { target: { value: '' } });
+    expect(
+      currentDocument().schema.properties?.[repeater.schemaPath.split('/').at(-1) as string]
+        ?.minItems,
+    ).toBeUndefined();
+  });
+
+  it('moves schemas across repeater scope and duplicates complete row templates', () => {
+    render(<DesignerHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '选择基础信息' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加重复字段组' }));
+    const authored = currentDocument();
+    const repeater = authored.ui.nodes.find(
+      (node) =>
+        node.kind === 'repeater' &&
+        node.schemaPath &&
+        authored.schema.properties?.[node.schemaPath.split('/').at(-1) as string]?.items?.type ===
+          'object',
+    );
+    if (!repeater) throw new Error('Missing authored repeater.');
+
+    const moveInto = dragTransfer();
+    fireEvent.dragStart(window.document.querySelector('[data-node-id="name"]') as HTMLElement, {
+      dataTransfer: moveInto,
+    });
+    fireEvent.drop(screen.getByRole('button', { name: `插入到${repeater.id}第1位` }), {
+      dataTransfer: moveInto,
+    });
+    let document = currentDocument();
+    const nestedName = document.ui.nodes.find((node) => node.id === 'name');
+    expect(nestedName?.schemaPath).toBe(`${repeater.schemaPath}/items/properties/name`);
+    expect(document.schema.properties?.name).toBeUndefined();
+    expect(
+      document.schema.properties?.[repeater.schemaPath?.split('/').at(-1) as string]?.items
+        ?.required,
+    ).toContain('name');
+    expect(compileForm(document).ok).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: repeater.label }));
+    fireEvent.click(
+      within(screen.getByRole('complementary', { name: '属性面板' })).getByRole('button', {
+        name: '复制节点',
+      }),
+    );
+    document = currentDocument();
+    const repeaters = document.ui.nodes.filter(
+      (node) =>
+        node.kind === 'repeater' &&
+        node.schemaPath &&
+        document.schema.properties?.[node.schemaPath.split('/').at(-1) as string]?.items?.type ===
+          'object',
+    );
+    expect(repeaters).toHaveLength(2);
+    const clone = repeaters.find((node) => node.id !== repeater.id);
+    const clonedName = document.ui.nodes.find((node) => clone?.children?.includes(node.id));
+    expect(clonedName?.schemaPath?.startsWith(`${clone?.schemaPath}/items/`)).toBe(true);
+    expect(compileForm(document).ok).toBe(true);
+  });
+
   it('duplicates required fields with collision-safe schema keys and protects the last panel', () => {
     render(<DesignerHarness />);
     fireEvent.click(screen.getByRole('button', { name: '选择姓名' }));

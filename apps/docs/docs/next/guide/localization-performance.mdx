@@ -31,7 +31,7 @@ React, Vue, Web Components, and Designer preview use the same catalog. It covers
 
 ## Field subscriptions
 
-The compiler records rule dependencies and a subscription list for every node. A field subscribes to its own value, rules that target it, and declared dependencies for its data source. React can then skip unrelated field renders without losing the latest whole host value in callbacks.
+The compiler records rule dependencies and a subscription list for every node. A field subscribes to its own value, rules that target it, and declared dependencies for its data source. Dynamic templates such as `routes.*.match` resolve with the current row indices before comparison, so sibling repeater rows do not share one broad value subscription. React can then skip unrelated field renders without losing the latest whole host value in callbacks.
 
 Custom node-registry renderers receive the entire form value and remain conservatively unmemoized until a dependency contract is available.
 

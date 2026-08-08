@@ -79,6 +79,14 @@ if (!result.ok) {
 
 The contract has no A3S Cloud, A3S Workflow service, or Dify runtime dependency. See [Embedding A3S Form](embedding.md) and the tested [`DifyLikeWorkflowNode`](../examples/dify-like-workflow-node.tsx).
 
+### Repeated node parameters
+
+Use a `repeater` node with child fields for an object-array parameter. The host still stores the array as ordinary configuration and receives the entire next value through `onChange`. A3S Form keeps local row keys outside the value.
+
+When a host recreates or reorders row objects from another state store, provide `hostAdapter.identifyRepeaterItem` and return a stable business identity. Do not add an A3S-only property to a Dify-like node configuration just to satisfy React keying. If the document already has a required string identifier, it may declare that property as `itemKey` instead.
+
+See [Repeatable field groups](repeatable-field-groups.md) for a complete schema/UI example and migration guidance.
+
 ## Custom nodes
 
 `FormNodeRegistry` keeps a business component's catalog entry, default schema, design view, inspector, and runtime view under one approved registry key. Documents store the key and JSON configuration; they never store executable JavaScript.

@@ -1,4 +1,5 @@
 import { resolveFormLocaleCatalog } from './locale';
+import { matchValuePathTemplate } from './pointer';
 import { evaluateFormValue } from './state';
 import type {
   AsyncValidationEvaluation,
@@ -29,7 +30,11 @@ function isValuePath(path: string): boolean {
 
 function isScopeValid(plan: FormPlan, scope: AsyncValidationScope): boolean {
   if (scope.kind === 'form') return true;
-  return plan.nodeById[scope.nodeId]?.valuePath === scope.path;
+  const node = plan.nodeById[scope.nodeId];
+  return (
+    node?.valuePath === scope.path ||
+    matchValuePathTemplate(node?.valuePathTemplate, scope.path) !== undefined
+  );
 }
 
 function hasBlockingErrors(evaluation: FormValueEvaluation, scope: AsyncValidationScope): boolean {

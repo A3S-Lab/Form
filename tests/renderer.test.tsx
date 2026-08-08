@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import {
   type AsyncValidationRequest,
@@ -7,6 +7,7 @@ import {
   type FormDocument,
   type FormHostAdapter,
   type JsonObject,
+  type JsonSchema,
 } from '../src/core';
 import {
   defineFormNodeRegistry,
@@ -14,7 +15,11 @@ import {
   FormRenderer,
   type FormWidgetProps,
 } from '../src/react';
-import { createDocument } from './fixtures';
+import {
+  createDocument,
+  createNestedRepeaterDocument,
+  createObjectRepeaterDocument,
+} from './fixtures';
 
 function RendererHarness({
   document = createDocument(),
@@ -35,6 +40,37 @@ function RendererHarness({
       <output data-testid="renderer-value">{JSON.stringify(value)}</output>
     </>
   );
+}
+
+function createPrimitiveRepeaterDocument(items: JsonSchema): FormDocument {
+  return {
+    kind: 'a3s.form',
+    apiVersion: 'a3s.dev/form/v1alpha1',
+    revision: 1,
+    metadata: { title: 'Repeated values', locale: 'en-US' },
+    schema: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: { values: { type: 'array', items } },
+      required: ['values'],
+      additionalProperties: false,
+    },
+    ui: {
+      root: 'root',
+      nodes: [
+        { id: 'root', kind: 'root', children: ['values'] },
+        {
+          id: 'values',
+          kind: 'repeater',
+          label: 'Values',
+          schemaPath: '/properties/values',
+        },
+      ],
+    },
+    rules: [],
+    dataSources: [],
+    actions: [],
+  };
 }
 
 describe('React FormRenderer', () => {
@@ -475,6 +511,417 @@ describe('React FormRenderer', () => {
     const customButton = screen.getByRole('button', { name: '自定义字段' });
     fireEvent.click(customButton);
     expect(customButton.textContent).toBe('custom-value');
+  });
+
+  it.each([
+    ['an explicit default', { type: 'string', default: 'ready' }, 'ready'],
+    ['an array', { type: 'array' }, []],
+    ['a boolean', { type: 'boolean' }, false],
+    ['a bounded number', { type: 'number', minimum: 2.5 }, 2.5],
+    ['an unbounded number', { type: 'number' }, 0],
+    ['a bounded integer', { type: 'integer', minimum: 1.2 }, 2],
+    ['an unbounded integer', { type: 'integer' }, 0],
+    ['null', { type: 'null' }, null],
+    ['an untyped value', {}, ''],
+  ] as const)('creates a primitive repeater item from %s schema', (_label, itemSchema, expected) => {
+    const plan = assertCompiled(createPrimitiveRepeaterDocument(itemSchema as JsonSchema));
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({ values: [] });
+      return (
+        <>
+          <FormRenderer plan={plan} value={value} onChange={setValue} locale="en-US" />
+          <output data-testid="primitive-default-value">{JSON.stringify(value)}</output>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+    expect(JSON.parse(screen.getByTestId('primitive-default-value').textContent ?? '{}')).toEqual({
+      values: [expected],
+    });
+  });
+
+  it('renders an empty object-row template instead of coercing the item to text', () => {
+    const plan = assertCompiled(
+      createPrimitiveRepeaterDocument({
+        type: 'object',
+        additionalProperties: false,
+      }),
+    );
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({ values: [] });
+      return (
+        <>
+          <FormRenderer plan={plan} value={value} onChange={setValue} locale="en-US" />
+          <output data-testid="empty-object-repeater-value">{JSON.stringify(value)}</output>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+    expect(screen.getByRole('group', { name: 'Values item 1' })).toBeTruthy();
+    expect(screen.getByText('This item has no configured fields.')).toBeTruthy();
+    expect(screen.getByTestId('empty-object-repeater-value').textContent).toBe('{"values":[{}]}');
+  });
+
+  it('edits, adds, reorders and removes controlled object repeater rows', () => {
+    const plan = assertCompiled(createObjectRepeaterDocument());
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({
+        recipients: [{ rowId: 'recipient-1', name: 'Ada', email: 'ada@example.test' }],
+      });
+      return (
+        <>
+          <FormRenderer plan={plan} value={value} onChange={setValue} locale="en-US" />
+          <output data-testid="object-repeater-value">{JSON.stringify(value)}</output>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const firstRow = screen.getByRole('group', { name: 'Recipients item 1' });
+    fireEvent.change(within(firstRow).getByLabelText('Name'), { target: { value: 'Ada L.' } });
+    expect(screen.getByTestId('object-repeater-value').textContent).toContain('"name":"Ada L."');
+    expect(
+      (
+        within(firstRow).getByRole('button', {
+          name: 'Remove Recipients item 1',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+    const secondRow = screen.getByRole('group', { name: 'Recipients item 2' });
+    fireEvent.change(within(secondRow).getByLabelText('Name'), { target: { value: 'Grace' } });
+    expect(screen.getByTestId('object-repeater-value').textContent).toMatch(
+      /"rowId":"[^"]+","name":"Grace"/,
+    );
+
+    fireEvent.click(within(secondRow).getByRole('button', { name: 'Move Recipients item 2 up' }));
+    expect(
+      (
+        within(screen.getByRole('group', { name: 'Recipients item 1' })).getByLabelText(
+          'Name',
+        ) as HTMLInputElement
+      ).value,
+    ).toBe('Grace');
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Recipients item 1' })).getByRole('button', {
+        name: 'Remove Recipients item 1',
+      }),
+    );
+    expect(screen.queryByDisplayValue('Grace')).toBeNull();
+  });
+
+  it('preserves row-local widget state when object repeater rows move', () => {
+    const document = createObjectRepeaterDocument();
+    const repeater = document.ui.nodes.find((node) => node.id === 'recipients');
+    const name = document.ui.nodes.find((node) => node.id === 'recipient-name');
+    if (!name || !repeater) throw new Error('Missing recipient repeater fixture.');
+    delete repeater.itemKey;
+    name.widget = 'test.sticky';
+    const plan = assertCompiled(document, { capabilities: { widgets: ['test.sticky'] } });
+
+    function StickyWidget({ node, value, onChange }: FormWidgetProps) {
+      const [mountedWith] = useState(() => String(value ?? ''));
+      return (
+        <div>
+          <output data-testid="mounted-with">{mountedWith}</output>
+          <input
+            aria-label={node.label}
+            value={String(value ?? '')}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </div>
+      );
+    }
+
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({
+        recipients: [
+          { rowId: 'ada', name: 'Ada', email: 'ada@example.test' },
+          { rowId: 'grace', name: 'Grace', email: 'grace@example.test' },
+        ],
+      });
+      return (
+        <FormRenderer
+          plan={plan}
+          value={value}
+          onChange={setValue}
+          locale="en-US"
+          widgetRegistry={{ 'test.sticky': StickyWidget }}
+        />
+      );
+    }
+
+    render(<Harness />);
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Recipients item 1' })).getByRole('button', {
+        name: 'Move Recipients item 1 down',
+      }),
+    );
+    const firstRow = screen.getByRole('group', { name: 'Recipients item 1' });
+    const secondRow = screen.getByRole('group', { name: 'Recipients item 2' });
+    expect((within(firstRow).getByLabelText('Name') as HTMLInputElement).value).toBe('Grace');
+    expect(within(firstRow).getByTestId('mounted-with').textContent).toBe('Grace');
+    expect((within(secondRow).getByLabelText('Name') as HTMLInputElement).value).toBe('Ada');
+    expect(within(secondRow).getByTestId('mounted-with').textContent).toBe('Ada');
+  });
+
+  it('uses host-derived row identity across controlled external replacements', () => {
+    const document = createObjectRepeaterDocument();
+    const repeater = document.ui.nodes.find((node) => node.id === 'recipients');
+    const name = document.ui.nodes.find((node) => node.id === 'recipient-name');
+    const recipientItems = document.schema.properties?.recipients?.items;
+    if (!name || !repeater || !recipientItems?.properties) {
+      throw new Error('Missing recipient repeater fixture.');
+    }
+    delete repeater.itemKey;
+    delete recipientItems.properties.rowId;
+    recipientItems.required = recipientItems.required?.filter((property) => property !== 'rowId');
+    name.widget = 'test.sticky';
+    const plan = assertCompiled(document, { capabilities: { widgets: ['test.sticky'] } });
+    const identityPaths: string[] = [];
+
+    function StickyWidget({ node, value, onChange }: FormWidgetProps) {
+      const [mountedWith] = useState(() => String(value ?? ''));
+      return (
+        <div>
+          <output data-testid="host-mounted-with">{mountedWith}</output>
+          <input
+            aria-label={node.label}
+            value={String(value ?? '')}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </div>
+      );
+    }
+
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({
+        recipients: [
+          { name: 'Ada', email: 'ada@example.test' },
+          { name: 'Grace', email: 'grace@example.test' },
+        ],
+      });
+      return (
+        <>
+          <FormRenderer
+            plan={plan}
+            value={value}
+            onChange={setValue}
+            locale="en-US"
+            widgetRegistry={{ 'test.sticky': StickyWidget }}
+            hostAdapter={{
+              identifyRepeaterItem: ({ item, valuePath }) => {
+                identityPaths.push(valuePath);
+                if (!item || typeof item !== 'object' || Array.isArray(item)) return undefined;
+                return typeof item.email === 'string' ? item.email : undefined;
+              },
+            }}
+          />
+          <button
+            type="button"
+            onClick={() =>
+              setValue({
+                recipients: [
+                  { name: 'Grace Hopper', email: 'grace@example.test' },
+                  { name: 'Ada Lovelace', email: 'ada@example.test' },
+                ],
+              })
+            }
+          >
+            Replace from host
+          </button>
+          <output data-testid="host-repeater-value">{JSON.stringify(value)}</output>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace from host' }));
+    const firstRow = screen.getByRole('group', { name: 'Recipients item 1' });
+    const secondRow = screen.getByRole('group', { name: 'Recipients item 2' });
+    expect((within(firstRow).getByLabelText('Name') as HTMLInputElement).value).toBe(
+      'Grace Hopper',
+    );
+    expect(within(firstRow).getByTestId('host-mounted-with').textContent).toBe('Grace');
+    expect((within(secondRow).getByLabelText('Name') as HTMLInputElement).value).toBe(
+      'Ada Lovelace',
+    );
+    expect(within(secondRow).getByTestId('host-mounted-with').textContent).toBe('Ada');
+    expect(identityPaths.every((path) => path === 'recipients')).toBe(true);
+    expect(screen.getByTestId('host-repeater-value').textContent).not.toContain('rowId');
+  });
+
+  it('falls back from a failed host identity hook and avoids duplicate repeater blur validation', async () => {
+    const plan = assertCompiled(createObjectRepeaterDocument());
+    const scopes: string[] = [];
+    render(
+      <FormRenderer
+        plan={plan}
+        value={{ recipients: [{ name: 'Ada', email: 'ada@example.test' }] }}
+        onChange={() => undefined}
+        locale="en-US"
+        hostAdapter={{
+          identifyRepeaterItem: () => {
+            throw new Error('identity unavailable');
+          },
+          validateValue: async ({ scope }) => {
+            if (scope.kind === 'field') scopes.push(scope.path);
+            return { issues: [] };
+          },
+        }}
+      />,
+    );
+
+    const name = screen.getByLabelText('Name');
+    const email = screen.getByLabelText('Email');
+    fireEvent.blur(name, { relatedTarget: email });
+    await waitFor(() => expect(scopes).toEqual(['recipients.0.name']));
+    expect(screen.getByRole('group', { name: 'Recipients item 1' })).toBeTruthy();
+  });
+
+  it('enforces repeater limits and the host read-only boundary', () => {
+    const document = createObjectRepeaterDocument();
+    const recipients = document.schema.properties?.recipients;
+    if (!recipients) throw new Error('Missing recipients schema.');
+    recipients.maxItems = 2;
+    const plan = assertCompiled(document);
+
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({
+        recipients: [{ rowId: 'recipient-1', name: 'Ada', email: 'ada@example.test' }],
+      });
+      return (
+        <>
+          <FormRenderer plan={plan} value={value} onChange={setValue} locale="en-US" />
+          <output data-testid="limited-repeater-value">{JSON.stringify(value)}</output>
+        </>
+      );
+    }
+
+    const view = render(<Harness />);
+    const firstRow = screen.getByRole('group', { name: 'Recipients item 1' });
+    expect(
+      (
+        within(firstRow).getByRole('button', {
+          name: 'Remove Recipients item 1',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+    expect(screen.getByRole('group', { name: 'Recipients item 2' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Add item' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(screen.getByText('The maximum number of items is already present.')).toBeTruthy();
+
+    view.unmount();
+    const readOnlyPlan = assertCompiled(createObjectRepeaterDocument());
+    render(
+      <FormRenderer
+        plan={readOnlyPlan}
+        value={{
+          recipients: [
+            { rowId: 'recipient-1', name: 'Ada', email: 'ada@example.test' },
+            { rowId: 'recipient-2', name: 'Grace', email: 'grace@example.test' },
+          ],
+        }}
+        onChange={() => undefined}
+        locale="en-US"
+        readOnly
+      />,
+    );
+    const readOnlyFirst = screen.getByRole('group', { name: 'Recipients item 1' });
+    expect((within(readOnlyFirst).getByLabelText('Name') as HTMLInputElement).disabled).toBe(true);
+    expect(
+      within(readOnlyFirst)
+        .getByRole('button', { name: 'Move Recipients item 1 down' })
+        .closest('fieldset[disabled]'),
+    ).toBeTruthy();
+    expect(
+      within(readOnlyFirst)
+        .getByRole('button', { name: 'Remove Recipients item 1' })
+        .closest('fieldset[disabled]'),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Add item' }).closest('fieldset[disabled]'),
+    ).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('renders and updates nested object repeaters with resolved value paths', () => {
+    const plan = assertCompiled(createNestedRepeaterDocument());
+    function Harness() {
+      const [value, setValue] = useState<JsonObject>({
+        recipients: [
+          {
+            rowId: 'recipient-1',
+            name: 'Ada',
+            email: 'ada@example.test',
+            channels: [{ channelId: 'channel-1', address: '#agents' }],
+          },
+        ],
+      });
+      return (
+        <>
+          <FormRenderer plan={plan} value={value} onChange={setValue} locale="en-US" />
+          <output data-testid="nested-repeater-value">{JSON.stringify(value)}</output>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const recipient = screen.getByRole('group', { name: 'Recipients item 1' });
+    const channels = within(recipient).getByRole('group', { name: 'Channels' });
+    const firstChannel = within(channels).getByRole('group', { name: 'Channels item 1' });
+    fireEvent.change(within(firstChannel).getByLabelText('Address'), {
+      target: { value: '#runtime' },
+    });
+    fireEvent.click(within(channels).getByRole('button', { name: 'Add item' }));
+    const secondChannel = within(channels).getByRole('group', { name: 'Channels item 2' });
+    fireEvent.change(within(secondChannel).getByLabelText('Address'), {
+      target: { value: '#cloud' },
+    });
+    expect(screen.getByTestId('nested-repeater-value').textContent).toMatch(
+      /"channels":\[\{"channelId":"channel-1","address":"#runtime"\},\{"channelId":"[^"]+","address":"#cloud"\}\]/,
+    );
+  });
+
+  it('focuses the exact nested repeater field from the validation summary', () => {
+    const plan = assertCompiled(createNestedRepeaterDocument());
+    render(
+      <FormRenderer
+        plan={plan}
+        value={{
+          recipients: [
+            {
+              rowId: 'recipient-1',
+              name: 'Ada',
+              email: 'ada@example.test',
+              channels: [{ channelId: 'channel-1', address: '' }],
+            },
+          ],
+        }}
+        onChange={() => undefined}
+        locale="en-US"
+        errors={[
+          {
+            path: 'recipients.0.channels.0.address',
+            code: 'host.channel_address',
+            message: 'Choose a channel address.',
+          },
+        ]}
+      />,
+    );
+
+    const address = screen.getByLabelText('Address');
+    fireEvent.click(screen.getByRole('button', { name: 'Address: Choose a channel address.' }));
+    expect(window.document.activeElement).toBe(address);
+    expect(address.getAttribute('aria-invalid')).toBe('true');
   });
 
   it('rerenders only fields subscribed to the changed value path', async () => {
