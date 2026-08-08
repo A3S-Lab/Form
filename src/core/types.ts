@@ -295,6 +295,48 @@ export interface ComputedRuleEvaluation {
 
 export type FormValueEvaluation = ComputedRuleEvaluation;
 
+export type AsyncValidationScope =
+  | { kind: 'form' }
+  | { kind: 'field'; nodeId: string; path: string };
+
+export type AsyncValidationTrigger = 'blur' | 'submit';
+
+export interface AsyncValidationIssue {
+  path?: string;
+  code: string;
+  message: string;
+}
+
+export interface AsyncValidationRequest {
+  plan: FormPlan;
+  value: JsonObject;
+  scope: AsyncValidationScope;
+  trigger: AsyncValidationTrigger;
+  locale: string;
+}
+
+export interface AsyncValidationResponse {
+  issues: AsyncValidationIssue[];
+}
+
+export type FormAsyncValidator = (
+  request: AsyncValidationRequest,
+  signal: AbortSignal,
+) => Promise<AsyncValidationResponse>;
+
+export type AsyncValidationStatus = 'valid' | 'invalid' | 'cancelled' | 'unavailable';
+
+export interface AsyncValidationOptions {
+  scope?: AsyncValidationScope;
+  trigger?: AsyncValidationTrigger;
+  locale?: string;
+}
+
+export interface AsyncValidationEvaluation extends FormValueEvaluation {
+  asyncErrors: FieldError[];
+  status: AsyncValidationStatus;
+}
+
 export interface DataSourceRequest {
   definition: DataSourceDefinition;
   query?: string;
@@ -310,6 +352,7 @@ export interface ActionRequest {
 
 export interface FormHostAdapter {
   resolveDataSource?: (request: DataSourceRequest, signal: AbortSignal) => Promise<UiOption[]>;
+  validateValue?: FormAsyncValidator;
   // biome-ignore lint/suspicious/noConfusingVoidType: Host actions may intentionally return no payload.
   invokeAction?: (request: ActionRequest, signal: AbortSignal) => Promise<JsonValue | void>;
 }

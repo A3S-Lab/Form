@@ -74,3 +74,9 @@ Use a pinned reference only after validation:
 ```
 
 Modes are `configuration`, `interaction`, and `read-only`. The host owns storage, identity, authorization, data sources, submission, and audit.
+
+## Host validation
+
+`FormHostAdapter.validateValue` receives a cloned value, the immutable plan, locale, trigger, and either a field or form scope. It returns `{ "issues": [{ "path": "field", "code": "stable_code", "message": "..." }] }`. Codes map to `async.<code>`. Do not put endpoints, credentials, or executable validation logic in `FormDocument`.
+
+Field validation runs on blur. Form validation runs before a primary submit action. A controlled value change aborts pending work, and late responses must not update the current form. Protected business rules must run again inside the host's server-side commit transaction.

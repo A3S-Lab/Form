@@ -40,7 +40,7 @@ A3S Form 是可嵌入的 AI Native Form Designer。它把表单定义、可视�
 
 1. Designer 和 Renderer 都以同一编译器生成的 `FormPlan` 为准，预览与生产运行时不会各自解释原始 JSON。
 2. `FormDocument` 是唯一表单定义源。`revision` 提供乐观版本，canonical SHA-256 `digest` 固定发布内容。
-3. Renderer 是受控组件。值、错误、持久化、身份和动作副作用均由宿主所有。
+3. Renderer 是受控组件。值、错误、异步业务校验、持久化、身份和动作副作用均由宿主所有。
 4. AI 只提交绑定 `baseRevision` 的类型化 `FormPatch`；校验通过后才能原子应用，并生成新 revision 与 digest。
 5. 文档中不执行任意 JavaScript。组件、数据源和动作只通过宿主允许的 registry key 解析。
 
@@ -85,7 +85,7 @@ A3S Code 开发的 agentic 节点可以请求一个受治理的交互，但 Agen
 | 部件 | 状态模型 | 建议部署方式 |
 | --- | --- | --- |
 | Core compiler / validation | 无状态、确定性 | Worker、本地进程或隔离 Runtime，可独立扩缩容 |
-| React/Vue/Web Component Renderer | 客户端受控状态 | 随宿主前端嵌入 |
+| React/Vue/Web Component Renderer | 客户端受控状态、可取消校验请求 | 随宿主前端嵌入 |
 | Designer | 本地编辑状态 + 宿主文档 | 按需加载，保存交给宿主 |
 | Data source / action registry | 宿主业务状态 | 由 A3S Cloud 或产品服务授权与扩缩容 |
 | Workflow interaction | 耐久运行状态 | 由 A3S Workflow 持久化与恢复 |

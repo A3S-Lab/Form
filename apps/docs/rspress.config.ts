@@ -50,6 +50,7 @@ export default defineConfig({
         { text: 'Workflow-node embedding', link: '/next/guide/workflow-node-embedding' },
         { text: 'Schema Profile 1', link: '/next/guide/schema-profile-1' },
         { text: 'Computed rules', link: '/next/guide/computed-rules' },
+        { text: 'Async validation', link: '/next/guide/async-validation' },
       ],
     },
     editLink: {

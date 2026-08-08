@@ -1,3 +1,4 @@
+export * from './core/async-validation';
 export * from './core/canonical';
 export * from './core/compiler';
 export * from './core/expression';

@@ -36,12 +36,12 @@ function NodeSettings(props: {
 
   if (!pinned.ok) return <p role="alert">This node references another form release.</p>;
 
-  const save = async () => {
+  const save = async (_actionId: string, validatedValue: JsonObject) => {
     const descriptor = createWorkflowNodeConfiguration({
       nodeType: 'llm',
       nodeId: props.nodeId,
       form: props.form,
-      value,
+      value: validatedValue,
       locale: 'en-US',
     });
     const resolved = validateWorkflowNodeConfiguration(pinned.document, descriptor);
@@ -76,11 +76,11 @@ The embedding host owns:
 
 - the current value and persistence transaction;
 - authentication, authorization, tenant boundaries, and secrets;
-- data-source and action implementations through `FormHostAdapter`;
+- data-source, asynchronous validation, and action implementations through `FormHostAdapter`;
 - publication policy and access to the pinned `FormDocument`;
 - workflow node lifecycle, undo, audit, and deployment.
 
-A3S Form owns compilation, synchronous validation, field state, accessible rendering, adapter events, and the immutable plan derived from the pinned document.
+A3S Form owns compilation, synchronous validation, cancellation and stable mapping for host validation, field state, accessible rendering, adapter events, and the immutable plan derived from the pinned document. The host still owns the validation service, credentials, retry policy, and server-side commit check.
 
 Every accepted plan identifies `a3s.dev/form-schema-profile/1`. A workflow host should treat a different `schemaProfile` as an unsupported contract instead of attempting to render it. See [Schema Profile 1](schema-profile-1.md) for the keyword and format boundary.
 
@@ -105,6 +105,8 @@ renderer.readOnly = !permissions.canEditNode;
 renderer.addEventListener('value-change', (event) => updateDraft(event.detail));
 renderer.addEventListener('form-action', (event) => runHostAction(event.detail));
 ```
+
+See [Host-owned asynchronous validation](async-validation.md) for the `validateValue` adapter contract, field and submit scopes, cancellation behavior, and stable `async.<code>` mapping.
 
 ## CSS boundary
 

@@ -80,7 +80,7 @@ A basic schema renderer only draws inputs. A3S Form gives design, preview, runti
 | Surface | Implemented capabilities |
 | --- | --- |
 | **Form Designer** | Published A3S UI component contracts, field catalog, structure tree, grid/column/tab/collapse layouts, cross-container drag and drop, custom nodes, focused preview, responsive component/canvas/settings panels, undo/redo, save feedback, and compiler diagnostics |
-| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, validation summaries, error focus, async action states, `visible`/`enabled`/`validate` rules, host-resolved option sources, custom nodes, and primitive repeaters |
+| **Form Renderer** | A3S UI fields, controls, actions, tabs, accordions and cards with controlled values, validation summaries, error focus, cancellable host validation, async action states, complete rule execution, host-resolved option sources, custom nodes, and primitive repeaters |
 | **Form Compiler** | Input boundaries, semantic validation, dependency-cycle detection, capability checks, canonical SHA-256, immutable `FormPlan`, and a cancellable Worker |
 | **Agent Interface** | JSON CLI, revision-bound `FormPatch`, in-Designer JSON preflight and conflict feedback, `$a3s-form` skill, machine-readable diagnostics, and atomic changes |
 
@@ -99,10 +99,10 @@ Authoring and runtime behavior:
 - Preview mode removes the component catalog and inspector so the real form runtime owns the canvas. On compact screens, authoring switches between dedicated Components, Canvas, and Settings panels without horizontal overflow.
 - Save actions expose saving, saved, and failed states. `Cmd/Ctrl+S` uses the same save path as the toolbar action.
 - The Agent panel accepts deterministic `FormPatch` JSON, shows the current revision and protocol, validates the payload before applying it, and reports revision conflicts without mutating the document.
-- Draft actions receive the current controlled value without being blocked by required-field validation. Submit actions validate, show a summary, and focus the first invalid field.
+- Draft actions receive the current controlled value without being blocked by required-field validation. Submit actions run synchronous and host-owned asynchronous validation, show a summary, and focus the first invalid field.
 
 > [!IMPORTANT]
-> The v0.1 contract is a foundation, not a claim of full JSON Schema or enterprise-form parity. Computed-rule execution, a closed schema profile, complex repeatable groups, field-level subscriptions, complete localization, and draft/release collaboration are planned work. See the [product roadmap](ROADMAP.md) for scope and release gates.
+> The v0.1 contract is a foundation, not a claim of full JSON Schema or enterprise-form parity. The `next` baseline closes schema, computed-rule, embedding, and async-validation gaps; complex repeatable groups, field-level subscriptions, complete localization, and draft/release collaboration remain planned work. See the [product roadmap](ROADMAP.md) for scope and release gates.
 
 ### Minimal React embedding
 
@@ -175,13 +175,15 @@ The development compiler enforces [A3S Form Schema Profile 1](docs/schema-profil
 
 [Deterministic computed rules](docs/computed-rules.md) derive workflow-node parameters in a stable topological order. Arithmetic and branching stay inside the bounded expression language; failed calculations remove stale outputs and produce an inspectable trace.
 
+[Host-owned asynchronous validation](docs/async-validation.md) runs on field blur and before primary submit. Controlled value changes cancel pending requests, late responses are ignored, and host issues map to stable `async.<code>` field errors without exposing upstream exceptions.
+
 <a id="embedding"></a>
 
 ## Embedding Boundaries for A3S Cloud and Workflow
 
 | Integration | Contract |
 | --- | --- |
-| **A3S Cloud** | `createA3SCloudFormAdapter` injects organization/project/environment context, data sources, and actions. Cloud retains ownership of authorization, storage, secrets, and audit logs. |
+| **A3S Cloud** | `createA3SCloudFormAdapter` injects organization/project/environment context, data sources, async validation, and actions. Cloud retains ownership of authorization, storage, secrets, and audit logs. |
 | **Workflow node configuration** | `createWorkflowNodeConfiguration` describes a Dify-like node settings form without a platform dependency. `validateWorkflowNodeConfiguration` accepts the value only after its configuration-mode `FormRef` matches the published revision and digest. |
 | **Durable human interaction** | A run emits an `interaction` FormRef and pauses. It resumes only after the submission matches the original revision/digest and passes schema validation. |
 | **A3S Code agentic nodes** | An agent may request governed form interaction but receives no open browser, production credentials, or unbounded action channel. |
@@ -255,13 +257,13 @@ Current full runtime coverage:
 
 | Metric | Coverage |
 | --- | ---: |
-| Statements | **97.83%** |
-| Branches | **95.64%** |
-| Functions | **97.23%** |
-| Lines | **99.05%** |
+| Statements | **97.41%** |
+| Branches | **95.08%** |
+| Functions | **97.00%** |
+| Lines | **98.63%** |
 
-- All 197 unit and cross-framework integration tests pass.
-- The repository includes local A3S Test flows covering Designer → focused Preview → validation → action, responsive mobile authoring, browser-local persistence, and validated JSON import.
+- All 207 unit and cross-framework integration tests pass.
+- The repository includes local A3S Test flows covering Designer → focused Preview → validation → action, host-owned field validation, responsive mobile authoring, browser-local persistence, and validated JSON import.
 - A3S Test is intended for local coding agents and does not upload screenshots, video, or evidence.
 - CI installs locked dependencies and runs linting, type checks, coverage gates, package/CLI builds, documentation builds, and the Playground build.
 

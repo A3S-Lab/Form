@@ -4,6 +4,7 @@ import {
   type InputHTMLAttributes,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -23,6 +24,7 @@ import {
   type UiNode,
   type UiOption,
   updateFormValue,
+  validateFormValueAsync,
 } from '../core';
 import type { FormNodeRegistry } from './node-registry';
 import { SelectControl } from './select-control';
@@ -37,6 +39,7 @@ export interface FormWidgetProps {
   describedBy?: string;
   options: UiOption[];
   onChange: (value: JsonValue) => void;
+  onBlur?: () => void;
 }
 
 export type FormWidget = ComponentType<FormWidgetProps>;
@@ -73,6 +76,7 @@ function NativeWidget({
   describedBy,
   options,
   onChange,
+  onBlur,
 }: FormWidgetProps) {
   const common: InputHTMLAttributes<HTMLInputElement> = {
     id,
@@ -83,6 +87,7 @@ function NativeWidget({
     'aria-invalid': invalid || undefined,
     'aria-describedby': describedBy,
     placeholder: node.placeholder,
+    onBlur,
   };
   switch (node.widget) {
     case 'textarea':
@@ -98,6 +103,7 @@ function NativeWidget({
           placeholder={node.placeholder}
           value={String(value ?? '')}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
         />
       );
     case 'number':
@@ -140,6 +146,7 @@ function NativeWidget({
             const selected = options.find((option) => String(option.value) === event.target.value);
             onChange(selected?.value ?? event.target.value);
           }}
+          onBlur={onBlur}
         >
           <option value="">{node.placeholder ?? '请选择'}</option>
           {options.map((option) => (
@@ -161,6 +168,9 @@ function NativeWidget({
           aria-label={node.label ?? node.id}
           aria-describedby={describedBy}
           aria-required={required || undefined}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onBlur?.();
+          }}
         >
           {options.map((option) => (
             <label key={`${option.label}-${String(option.value)}`}>
@@ -241,7 +251,17 @@ interface NodeViewProps extends FormRendererProps {
   nodeId: string;
   errorMap: Map<string, FieldError[]>;
   prefix: string;
+  onFieldBlur: (nodeId: string, path: string) => void;
+  validatingPaths: ReadonlySet<string>;
   suppressHeading?: boolean;
+}
+
+function ValidationStatus({ label }: { label: string }) {
+  return (
+    <span className="a3s-form-validation-status" role="status" aria-label={`正在校验${label}`}>
+      正在校验…
+    </span>
+  );
 }
 
 function NodeView(props: NodeViewProps): ReactNode {
@@ -258,6 +278,7 @@ function NodeView(props: NodeViewProps): ReactNode {
   const node = plan.nodeById[nodeId];
   const [activeLayoutChild, setActiveLayoutChild] = useState<string>();
   const state = fieldState(plan, nodeId, value);
+  const validating = node.valuePath ? props.validatingPaths.has(node.valuePath) : false;
   const options = useOptions(
     node,
     plan,
@@ -284,6 +305,8 @@ function NodeView(props: NodeViewProps): ReactNode {
         className={`a3s-form-custom-node field${errors.length ? ' is-invalid' : ''}`}
         data-node-type={node.widget}
         data-invalid={errors.length > 0 || undefined}
+        data-validating={validating || undefined}
+        aria-busy={validating || undefined}
         style={formItemStyle(node.width)}
       >
         <CustomNode
@@ -300,14 +323,20 @@ function NodeView(props: NodeViewProps): ReactNode {
             if (node.valuePath) onChange(updateFormValue(value, node.valuePath, next));
           }}
           onFormChange={onChange}
+          onBlur={
+            state.enabled && node.valuePath
+              ? () => props.onFieldBlur(node.id, node.valuePath as string)
+              : undefined
+          }
         >
           {children}
         </CustomNode>
         {errors.map((error) => (
-          <div className="a3s-form-error" role="alert" key={error.code}>
+          <div className="a3s-form-error" role="alert" key={`${error.code}-${error.message}`}>
             {error.message}
           </div>
         ))}
+        {validating && <ValidationStatus label={node.label ?? node.id} />}
       </div>
     );
   }
@@ -462,6 +491,13 @@ function NodeView(props: NodeViewProps): ReactNode {
         style={formItemStyle(node.width)}
         disabled={props.readOnly || !state.enabled}
         aria-describedby={describedBy || undefined}
+        aria-busy={validating || undefined}
+        data-validating={validating || undefined}
+        onBlur={(event) => {
+          if (state.enabled && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            props.onFieldBlur(node.id, node.valuePath as string);
+          }
+        }}
       >
         <legend className={required ? 'is-required' : undefined}>{node.label ?? node.id}</legend>
         {node.description && (
@@ -520,6 +556,7 @@ function NodeView(props: NodeViewProps): ReactNode {
             {error.message}
           </div>
         ))}
+        {validating && <ValidationStatus label={node.label ?? node.id} />}
       </fieldset>
     );
   }
@@ -527,6 +564,8 @@ function NodeView(props: NodeViewProps): ReactNode {
     <div
       className={`a3s-form-field field${errors.length ? ' is-invalid' : ''}`}
       data-invalid={errors.length > 0 || undefined}
+      data-validating={validating || undefined}
+      aria-busy={validating || undefined}
       style={formItemStyle(node.width)}
     >
       {node.widget !== 'checkbox' && node.widget !== 'switch' && (
@@ -553,6 +592,9 @@ function NodeView(props: NodeViewProps): ReactNode {
         describedBy={describedBy || undefined}
         options={options}
         onChange={(next) => onChange(updateFormValue(value, node.valuePath as string, next))}
+        onBlur={
+          state.enabled ? () => props.onFieldBlur(node.id, node.valuePath as string) : undefined
+        }
       />
       {errors.map((error, index) => (
         <div
@@ -564,6 +606,7 @@ function NodeView(props: NodeViewProps): ReactNode {
           {error.message}
         </div>
       ))}
+      {validating && <ValidationStatus label={node.label ?? node.id} />}
     </div>
   );
 }
@@ -594,7 +637,18 @@ export function FormRenderer(props: FormRendererProps) {
   const prefix = `a3sf-${generatedId}`;
   const formRef = useRef<HTMLFormElement>(null);
   const actionController = useRef<AbortController | null>(null);
+  const formValidationController = useRef<AbortController | null>(null);
+  const fieldValidationControllers = useRef(new Map<string, AbortController>());
+  const validationBoundary = useRef({
+    hostAdapter: props.hostAdapter,
+    plan: props.plan,
+    value: props.value,
+  });
   const [submittedErrors, setSubmittedErrors] = useState<FieldError[]>([]);
+  const [fieldAsyncErrors, setFieldAsyncErrors] = useState<Record<string, FieldError[]>>({});
+  const [formAsyncErrors, setFormAsyncErrors] = useState<FieldError[]>([]);
+  const [validatingPaths, setValidatingPaths] = useState<ReadonlySet<string>>(() => new Set());
+  const [validatingForm, setValidatingForm] = useState(false);
   const [pendingAction, setPendingAction] = useState<string>();
   const [actionError, setActionError] = useState('');
   const computed = useMemo(
@@ -602,19 +656,23 @@ export function FormRenderer(props: FormRendererProps) {
     [props.plan, props.value],
   );
   const runtimeValue = computed.value;
+  const asyncErrors = useMemo(
+    () => [
+      ...Object.keys(fieldAsyncErrors)
+        .sort()
+        .flatMap((path) => fieldAsyncErrors[path]),
+      ...formAsyncErrors,
+    ],
+    [fieldAsyncErrors, formAsyncErrors],
+  );
   const errors = useMemo(() => {
     const hostErrors = props.errors ?? submittedErrors;
-    return [
-      ...computed.errors,
-      ...hostErrors.filter(
-        (error) =>
-          !computed.errors.some(
-            (computedError) =>
-              computedError.path === error.path && computedError.code === error.code,
-          ),
-      ),
-    ];
-  }, [computed.errors, props.errors, submittedErrors]);
+    const unique = new Map<string, FieldError>();
+    for (const error of [...computed.errors, ...hostErrors, ...asyncErrors]) {
+      unique.set(`${error.path}\u0000${error.code}\u0000${error.message}`, error);
+    }
+    return [...unique.values()];
+  }, [asyncErrors, computed.errors, props.errors, submittedErrors]);
   const errorMap = useMemo(() => {
     const map = new Map<string, FieldError[]>();
     for (const error of errors) map.set(error.path, [...(map.get(error.path) ?? []), error]);
@@ -623,7 +681,46 @@ export function FormRenderer(props: FormRendererProps) {
   const defaultAction =
     props.plan.actions.find((item) => item.tone === 'primary') ?? props.plan.actions[0];
 
-  useEffect(() => () => actionController.current?.abort(), []);
+  const abortFieldValidations = useCallback(() => {
+    for (const controller of fieldValidationControllers.current.values()) controller.abort();
+    fieldValidationControllers.current.clear();
+  }, []);
+
+  const cancelAsyncValidations = useCallback(() => {
+    abortFieldValidations();
+    formValidationController.current?.abort();
+    formValidationController.current = null;
+    setValidatingPaths(new Set());
+    setValidatingForm(false);
+    setFieldAsyncErrors({});
+    setFormAsyncErrors([]);
+  }, [abortFieldValidations]);
+
+  useEffect(() => {
+    const previous = validationBoundary.current;
+    if (
+      previous.hostAdapter === props.hostAdapter &&
+      previous.plan === props.plan &&
+      previous.value === props.value
+    ) {
+      return;
+    }
+    validationBoundary.current = {
+      hostAdapter: props.hostAdapter,
+      plan: props.plan,
+      value: props.value,
+    };
+    cancelAsyncValidations();
+  });
+
+  useEffect(
+    () => () => {
+      actionController.current?.abort();
+      formValidationController.current?.abort();
+      abortFieldValidations();
+    },
+    [abortFieldValidations],
+  );
 
   const focusError = (path: string) => {
     const node = Object.values(props.plan.nodeById).find((item) => item.valuePath === path);
@@ -634,6 +731,7 @@ export function FormRenderer(props: FormRendererProps) {
   };
 
   const changeValue = (next: JsonObject) => {
+    cancelAsyncValidations();
     const evaluation = evaluateFormValue(props.plan, next);
     props.onChange(evaluation.value);
     if (props.errors === undefined && submittedErrors.length > 0) {
@@ -641,10 +739,59 @@ export function FormRenderer(props: FormRendererProps) {
     }
   };
 
+  const validateField = async (nodeId: string, path: string) => {
+    const validator = props.hostAdapter?.validateValue;
+    if (!validator || props.readOnly || formValidationController.current || pendingAction) return;
+
+    fieldValidationControllers.current.get(path)?.abort();
+    const controller = new AbortController();
+    fieldValidationControllers.current.set(path, controller);
+    setFieldAsyncErrors((current) => {
+      if (!(path in current)) return current;
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
+    setValidatingPaths((current) => new Set(current).add(path));
+
+    const result = await validateFormValueAsync(
+      props.plan,
+      runtimeValue,
+      validator,
+      {
+        scope: { kind: 'field', nodeId, path },
+        trigger: 'blur',
+        locale: props.locale ?? props.plan.metadata.locale,
+      },
+      controller.signal,
+    );
+    if (controller.signal.aborted || fieldValidationControllers.current.get(path) !== controller) {
+      return;
+    }
+    fieldValidationControllers.current.delete(path);
+    setValidatingPaths((current) => {
+      if (!current.has(path)) return current;
+      const next = new Set(current);
+      next.delete(path);
+      return next;
+    });
+    setFieldAsyncErrors((current) => {
+      if (result.asyncErrors.length === 0) {
+        if (!(path in current)) return current;
+        const next = { ...current };
+        delete next[path];
+        return next;
+      }
+      return { ...current, [path]: result.asyncErrors };
+    });
+  };
+
   const invoke = async (actionId: string, requiresValidation: boolean) => {
-    if (pendingAction) return;
+    if (pendingAction || formValidationController.current) return;
+    const definition = props.plan.actions.find((item) => item.id === actionId);
+    if (!definition) return;
     setActionError('');
-    const evaluation = evaluateFormValue(props.plan, runtimeValue);
+    let evaluation = evaluateFormValue(props.plan, runtimeValue);
     if (requiresValidation) {
       const nextErrors = evaluation.errors;
       setSubmittedErrors(nextErrors);
@@ -652,9 +799,39 @@ export function FormRenderer(props: FormRendererProps) {
         window.requestAnimationFrame(() => focusError(nextErrors[0].path));
         return;
       }
+      if (props.hostAdapter?.validateValue) {
+        abortFieldValidations();
+        setValidatingPaths(new Set());
+        setFieldAsyncErrors({});
+        setFormAsyncErrors([]);
+        const controller = new AbortController();
+        formValidationController.current = controller;
+        setValidatingForm(true);
+        const asyncEvaluation = await validateFormValueAsync(
+          props.plan,
+          evaluation.value,
+          props.hostAdapter.validateValue,
+          {
+            scope: { kind: 'form' },
+            trigger: 'submit',
+            locale: props.locale ?? props.plan.metadata.locale,
+          },
+          controller.signal,
+        );
+        if (controller.signal.aborted || formValidationController.current !== controller) {
+          return;
+        }
+        formValidationController.current = null;
+        setValidatingForm(false);
+        setFormAsyncErrors(asyncEvaluation.asyncErrors);
+        if (asyncEvaluation.status !== 'valid') {
+          const firstError = asyncEvaluation.errors[0];
+          if (firstError) window.requestAnimationFrame(() => focusError(firstError.path));
+          return;
+        }
+        evaluation = asyncEvaluation;
+      }
     }
-    const definition = props.plan.actions.find((item) => item.id === actionId);
-    if (!definition) return;
     setPendingAction(actionId);
     const controller = new AbortController();
     actionController.current = controller;
@@ -690,7 +867,7 @@ export function FormRenderer(props: FormRendererProps) {
       className={`a3s-form-renderer ${props.className ?? ''}`}
       onSubmit={submit}
       noValidate
-      aria-busy={Boolean(pendingAction)}
+      aria-busy={Boolean(pendingAction || validatingForm)}
       lang={props.locale ?? props.plan.metadata.locale ?? 'zh-CN'}
     >
       <NodeView
@@ -700,6 +877,8 @@ export function FormRenderer(props: FormRendererProps) {
         nodeId={props.plan.root}
         errorMap={errorMap}
         prefix={prefix}
+        onFieldBlur={(nodeId, path) => void validateField(nodeId, path)}
+        validatingPaths={validatingPaths}
       />
       {errors.length > 0 && (
         <section className="a3s-form-error-summary" role="alert" aria-label="表单校验结果">
@@ -747,9 +926,13 @@ export function FormRenderer(props: FormRendererProps) {
                   if (primary) event.preventDefault();
                   void invoke(action.id, primary);
                 }}
-                disabled={Boolean(props.readOnly || pendingAction)}
+                disabled={Boolean(props.readOnly || pendingAction || validatingForm)}
               >
-                {pendingAction === action.id ? '处理中…' : action.label}
+                {pendingAction === action.id
+                  ? '处理中…'
+                  : validatingForm && primary
+                    ? '校验中…'
+                    : action.label}
               </button>
             );
           })}
@@ -758,6 +941,16 @@ export function FormRenderer(props: FormRendererProps) {
       {pendingAction && (
         <span className="a3s-form-action-progress" role="status" aria-live="polite">
           正在处理表单操作。
+        </span>
+      )}
+      {validatingForm && (
+        <span
+          className="a3s-form-action-progress"
+          role="status"
+          aria-label="正在校验表单"
+          aria-live="polite"
+        >
+          正在校验表单。
         </span>
       )}
     </form>

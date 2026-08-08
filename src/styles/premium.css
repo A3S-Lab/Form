@@ -332,6 +332,37 @@
 
 /* Renderer validation and action states */
 
+.a3s-form-validation-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  color: var(--a3s-form-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.a3s-form-validation-status::before {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid color-mix(in srgb, var(--a3s-form-blue) 24%, var(--a3s-form-line));
+  border-top-color: var(--a3s-form-blue);
+  border-radius: 50%;
+  animation: a3s-form-validation-spin 700ms linear infinite;
+  content: "";
+}
+
+.a3s-form-field[data-validating="true"]
+  :where(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+  border-color: color-mix(in srgb, var(--a3s-form-blue) 42%, var(--a3s-form-line));
+}
+
+@keyframes a3s-form-validation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .a3s-form-tabpanel {
   min-width: 0;
 }
@@ -598,6 +629,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .a3s-form-designer-notice {
+    animation: none;
+  }
+
+  .a3s-form-validation-status::before {
     animation: none;
   }
 

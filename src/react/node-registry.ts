@@ -40,6 +40,7 @@ export interface FormNodeRenderProps {
   children?: ReactNode;
   onChange: (value: JsonValue) => void;
   onFormChange: (value: JsonObject) => void;
+  onBlur?: () => void;
 }
 
 export interface FormNodeInspectorProps {

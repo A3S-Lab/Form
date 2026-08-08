@@ -69,6 +69,7 @@ export const sampleForm: FormDocument = {
         id: 'email',
         kind: 'field',
         label: '企业邮箱',
+        description: '离开输入框时检查邮箱是否可用',
         schemaPath: '/properties/email',
         widget: 'email',
         placeholder: 'name@company.com',

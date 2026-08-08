@@ -1,6 +1,11 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { compileForm, type FormDocument, type JsonObject } from '../../../src/core';
+import {
+  compileForm,
+  type FormDocument,
+  type FormHostAdapter,
+  type JsonObject,
+} from '../../../src/core';
 import { FormDesigner } from '../../../src/react';
 import '../../../src/styles.css';
 import './playground.css';
@@ -19,6 +24,20 @@ import { type WorkspaceTemplateId, WorkspaceView } from './workspace-view';
 
 const playgroundCapabilities = { widgets: Object.keys(playgroundNodeRegistry) };
 const playgroundSeeds = [{ id: 'employee-onboarding', document: sampleForm }, ...workflowFormSeeds];
+const playgroundHostAdapter: FormHostAdapter = {
+  validateValue: async (request) => ({
+    issues:
+      request.value.email === 'used@a3s.dev'
+        ? [
+            {
+              path: 'email',
+              code: 'email_in_use',
+              message: '该企业邮箱已被占用。',
+            },
+          ]
+        : [],
+  }),
+};
 
 type StorageState = 'saving' | 'saved' | 'error';
 
@@ -288,6 +307,7 @@ function App() {
             onValueChange={setValue}
             onAction={handleAction}
             compileOptions={{ capabilities: playgroundCapabilities }}
+            hostAdapter={playgroundHostAdapter}
             nodeRegistry={playgroundNodeRegistry}
           />
         </main>

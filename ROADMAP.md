@@ -56,7 +56,8 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 - Host-neutral workflow-node configuration, digest-pinned validation, controlled adapter parity, scoped CSS, and package budgets are implemented and covered by the Dify-like reference host.
 - A3S Form Schema Profile 1 is enforced recursively. Unsupported keywords fail compilation; `const`, structural `enum`, `uniqueItems`, `additionalProperties`, and nine approved formats have runtime coverage.
 - Computed fields use a stable topological order, bounded arithmetic and branching, stale-output removal, dependency failure propagation, and an opt-in value trace.
-- Remaining v0.2 work starts with async validation, then data-source orchestration, subscriptions, locale catalogs, and performance gates.
+- Host-owned field and form validation is cancellable, rejects stale responses, maps server issues to stable codes, and has React, Vue, Web Component, Cloud, and Dify-like host coverage.
+- Remaining v0.2 work starts with data-source orchestration, then subscriptions, locale catalogs, and performance gates.
 
 ### Planned capabilities
 
@@ -65,7 +66,7 @@ Known boundaries are intentional roadmap inputs, not completed capabilities:
 - Remove host-global CSS resets, enforce stylesheet size budgets, and keep A3S UI-compatible tokens scoped to Designer and Renderer roots.
 - Align host-facing value, action, error, locale, read-only, adapter, widget, and node-registry capabilities across React, Vue, and Web Components.
 - Stabilize the complete `visible`, `enabled`, `computed`, and `validate` rule runtime for release, including deterministic dependency evaluation, cycle diagnostics, and an inspectable execution trace.
-- Add cancellable field-level and form-level asynchronous validation with stable server-error mapping.
+- Stabilize and publish cancellable field-level and form-level asynchronous validation with stable server-error mapping.
 - Implement data-source dependencies and triggers, `cacheTtlMs`, request deduplication, debounce, cancellation, search, pagination, and loading/empty/error/retry states.
 - Introduce field-level subscriptions and incremental rule evaluation so unrelated edits do not rerender or refetch unrelated nodes.
 - Replace hard-coded runtime messages with versioned locale catalogs and host overrides.

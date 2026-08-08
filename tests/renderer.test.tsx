@@ -1,6 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { assertCompiled, type FormDocument, type JsonObject } from '../src/core';
+import {
+  type AsyncValidationRequest,
+  type AsyncValidationResponse,
+  assertCompiled,
+  type FormDocument,
+  type FormHostAdapter,
+  type JsonObject,
+} from '../src/core';
 import {
   defineFormNodeRegistry,
   type FormNodeRenderProps,
@@ -134,6 +141,177 @@ describe('React FormRenderer', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: '提交' }));
     await waitFor(() => expect(submitted?.displayName).toBe('Grace Lovelace'));
+  });
+
+  it('runs field validation on blur and maps missing issue paths to the field', async () => {
+    const plan = assertCompiled(createDocument());
+    let received: AsyncValidationRequest | undefined;
+    let resolve: ((response: AsyncValidationResponse) => void) | undefined;
+    const hostAdapter: FormHostAdapter = {
+      validateValue: (request) => {
+        received = request;
+        return new Promise((next) => {
+          resolve = next;
+        });
+      },
+    };
+
+    function AsyncFieldHarness() {
+      const [value, setValue] = useState<JsonObject>({ name: 'Taken' });
+      return (
+        <FormRenderer
+          plan={plan}
+          value={value}
+          onChange={setValue}
+          hostAdapter={hostAdapter}
+          locale="en-US"
+        />
+      );
+    }
+
+    render(<AsyncFieldHarness />);
+    fireEvent.blur(screen.getByLabelText('姓名'));
+    expect(await screen.findByRole('status', { name: '正在校验姓名' })).toBeTruthy();
+    expect(received).toEqual(
+      expect.objectContaining({
+        scope: { kind: 'field', nodeId: 'name', path: 'name' },
+        trigger: 'blur',
+        locale: 'en-US',
+      }),
+    );
+
+    resolve?.({ issues: [{ code: 'name_taken', message: 'This name is already in use.' }] });
+    expect(await screen.findByText('This name is already in use.')).toBeTruthy();
+    expect(screen.queryByRole('status', { name: '正在校验姓名' })).toBeNull();
+    expect(screen.getByLabelText('姓名').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('aborts stale field validation when the controlled value changes', async () => {
+    const plan = assertCompiled(createDocument());
+    const requests: Array<{
+      request: AsyncValidationRequest;
+      signal: AbortSignal;
+      resolve: (response: AsyncValidationResponse) => void;
+    }> = [];
+    const hostAdapter: FormHostAdapter = {
+      validateValue: (request, signal) =>
+        new Promise((resolve) => {
+          requests.push({ request, signal, resolve });
+        }),
+    };
+
+    function RaceHarness() {
+      const [value, setValue] = useState<JsonObject>({ name: 'First' });
+      return (
+        <FormRenderer plan={plan} value={value} onChange={setValue} hostAdapter={hostAdapter} />
+      );
+    }
+
+    render(<RaceHarness />);
+    const name = screen.getByLabelText('姓名');
+    fireEvent.blur(name);
+    await waitFor(() => expect(requests).toHaveLength(1));
+    fireEvent.change(name, { target: { value: 'Second' } });
+    expect(requests[0].signal.aborted).toBe(true);
+    fireEvent.blur(screen.getByLabelText('姓名'));
+    await waitFor(() => expect(requests).toHaveLength(2));
+
+    requests[0].resolve({ issues: [{ code: 'stale', message: 'Stale response.' }] });
+    requests[1].resolve({ issues: [] });
+    await waitFor(() => expect(screen.queryByRole('status', { name: '正在校验姓名' })).toBeNull());
+    expect(screen.queryByText('Stale response.')).toBeNull();
+    expect(requests[1].request.value).toEqual(expect.objectContaining({ name: 'Second' }));
+  });
+
+  it('blocks submit until host form validation succeeds', async () => {
+    const plan = assertCompiled(createDocument());
+    let calls = 0;
+    let actionValue: JsonObject | undefined;
+    const hostAdapter: FormHostAdapter = {
+      validateValue: async (request) => {
+        calls += 1;
+        return {
+          issues:
+            request.value.name === 'Blocked'
+              ? [{ path: 'name', code: 'blocked', message: 'This node name is blocked.' }]
+              : [],
+        };
+      },
+    };
+
+    function AsyncSubmitHarness() {
+      const [value, setValue] = useState<JsonObject>({ name: 'Blocked' });
+      return (
+        <FormRenderer
+          plan={plan}
+          value={value}
+          onChange={setValue}
+          hostAdapter={hostAdapter}
+          onAction={(_actionId, next) => {
+            actionValue = next;
+          }}
+        />
+      );
+    }
+
+    render(<AsyncSubmitHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    expect(await screen.findByText('This node name is blocked.')).toBeTruthy();
+    expect(actionValue).toBeUndefined();
+
+    fireEvent.change(screen.getByLabelText('姓名'), { target: { value: 'Allowed' } });
+    expect(screen.queryByText('This node name is blocked.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    await waitFor(() => expect(actionValue).toEqual(expect.objectContaining({ name: 'Allowed' })));
+    expect(calls).toBe(2);
+  });
+
+  it('cancels a pending submit validation when the host changes the controlled value', async () => {
+    const plan = assertCompiled(createDocument());
+    const requests: Array<{
+      signal: AbortSignal;
+      resolve: (response: AsyncValidationResponse) => void;
+    }> = [];
+    const hostAdapter: FormHostAdapter = {
+      validateValue: (_request, signal) =>
+        new Promise((resolve) => {
+          requests.push({ signal, resolve });
+        }),
+    };
+    let submitted: JsonObject | undefined;
+
+    function SubmitRaceHarness() {
+      const [value, setValue] = useState<JsonObject>({ name: 'Before' });
+      return (
+        <FormRenderer
+          plan={plan}
+          value={value}
+          onChange={setValue}
+          hostAdapter={hostAdapter}
+          onAction={(_actionId, next) => {
+            submitted = next;
+          }}
+        />
+      );
+    }
+
+    render(<SubmitRaceHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    const validating = await screen.findByRole('button', { name: '校验中…' });
+    expect((validating as HTMLButtonElement).disabled).toBe(true);
+    expect(validating.closest('form')?.getAttribute('aria-busy')).toBe('true');
+    await waitFor(() => expect(requests).toHaveLength(1));
+
+    fireEvent.change(screen.getByLabelText('姓名'), { target: { value: 'After' } });
+    expect(requests[0].signal.aborted).toBe(true);
+    requests[0].resolve({ issues: [{ code: 'stale', message: 'Stale submit response.' }] });
+    await waitFor(() => expect(screen.getByRole('button', { name: '提交' })).toBeTruthy());
+    expect(screen.queryByText('Stale submit response.')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+    await waitFor(() => expect(requests).toHaveLength(2));
+    requests[1].resolve({ issues: [] });
+    await waitFor(() => expect(submitted).toEqual(expect.objectContaining({ name: 'After' })));
   });
 
   it('gives native controls consistent labels, required semantics and select framing', async () => {

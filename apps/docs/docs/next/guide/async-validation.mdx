@@ -1,0 +1,24 @@
+# Host-owned async validation
+
+The `next` runtime can validate a field on blur and the complete value before a primary submit without putting an endpoint or credential in `FormDocument`.
+
+```ts
+const hostAdapter = {
+  async validateValue(request, signal) {
+    const response = await validateWorkflowNode(request.value, { signal });
+    return {
+      issues: response.issues.map(({ field, code, message }) => ({
+        path: field,
+        code,
+        message,
+      })),
+    };
+  },
+};
+```
+
+Synchronous validation runs first. Field requests use `{ kind: "field", nodeId, path }`; submit requests use `{ kind: "form" }`. Controlled value changes abort pending work and make late responses ineligible to update the current form.
+
+Host issue codes map to `async.<code>`. Malformed responses, unavailable services, and invalid scopes fail closed with stable codes and do not expose upstream exception details. React, Vue, Web Components, the A3S Cloud adapter, and the Dify-like reference host share this contract.
+
+Read the [complete async-validation contract](https://github.com/A3S-Lab/Form/blob/main/docs/async-validation.md) for cancellation, headless use, and server-side enforcement.

@@ -32,10 +32,15 @@ describe('framework adapters', () => {
     const widgetRegistry = vueRef<FormWidgetRegistry>();
     const nodeRegistry = vueRef<FormNodeRegistry>();
     const resolvedLocales: string[] = [];
+    const validationScopes: string[] = [];
     const hostAdapter = vueRef<FormHostAdapter | undefined>({
       resolveDataSource: async (request) => {
         resolvedLocales.push(request.locale);
         return [{ label: 'Operator', value: 'member' }];
+      },
+      validateValue: async (request) => {
+        validationScopes.push(request.scope.kind);
+        return { issues: [] };
       },
     });
     let action: { actionId: string; value: JsonObject } | undefined;
@@ -76,6 +81,7 @@ describe('framework adapters', () => {
     );
     fireEvent.click(container.querySelector('button[type="submit"]') as HTMLButtonElement);
     await waitFor(() => expect(action).toEqual({ actionId: 'submit', value: { name: '李小明' } }));
+    expect(validationScopes).toContain('form');
     readOnly.value = true;
     errors.value = [];
     locale.value = 'de-DE';
@@ -199,6 +205,13 @@ describe('framework adapters', () => {
     expect(element.value).toEqual({});
     let detail: JsonObject | undefined;
     let action: { actionId: string; value: JsonObject } | undefined;
+    const validationScopes: string[] = [];
+    element.hostAdapter = {
+      validateValue: async (request) => {
+        validationScopes.push(request.scope.kind);
+        return { issues: [] };
+      },
+    };
     element.addEventListener('value-change', (event) => {
       detail = (event as CustomEvent<JsonObject>).detail;
     });
@@ -213,6 +226,7 @@ describe('framework adapters', () => {
     expect(detail?.name).toBe('王小云');
     fireEvent.click(element.querySelector('button[type="submit"]') as HTMLButtonElement);
     await waitFor(() => expect(action).toEqual({ actionId: 'submit', value: { name: '王小云' } }));
+    expect(validationScopes).toContain('form');
     element.plan = undefined;
     expect(element.plan).toBeUndefined();
     await waitFor(() => expect(element.querySelector('input[id*="name"]')).toBeNull());

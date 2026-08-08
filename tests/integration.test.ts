@@ -234,6 +234,18 @@ describe('Workflow and Cloud seams', () => {
         organizationId: cloud.organizationId,
         action: request.definition.id,
       }),
+      validateValue: async (cloud, request) => ({
+        issues:
+          request.value.name === 'blocked'
+            ? [
+                {
+                  path: 'name',
+                  code: 'blocked_name',
+                  message: `Blocked in ${cloud.environmentId}.`,
+                },
+              ]
+            : [],
+      }),
     });
     const plan = compileForm(createDocument()).plan as NonNullable<
       ReturnType<typeof compileForm>['plan']
@@ -250,15 +262,36 @@ describe('Workflow and Cloud seams', () => {
       signal,
     );
     expect(action).toEqual({ organizationId: 'org-1', action: 'submit' });
+    const validation = await adapter.validateValue?.(
+      {
+        plan,
+        value: { name: 'blocked' },
+        scope: { kind: 'form' },
+        trigger: 'submit',
+        locale: 'en-US',
+      },
+      signal,
+    );
+    expect(validation).toEqual({
+      issues: [
+        {
+          path: 'name',
+          code: 'blocked_name',
+          message: 'Blocked in prod.',
+        },
+      ],
+    });
     expect(JSON.stringify(plan)).not.toContain('org-1');
     expect(createA3SCloudFormAdapter({ context })).toEqual({
       resolveDataSource: undefined,
+      validateValue: undefined,
       invokeAction: undefined,
     });
     const emptyAdapter = createA3SCloudFormAdapter({
       context,
       resolveDataSource: (() => undefined) as never,
       invokeAction: (() => undefined) as never,
+      validateValue: (() => undefined) as never,
     });
     await expect(
       emptyAdapter.resolveDataSource?.(
@@ -269,5 +302,17 @@ describe('Workflow and Cloud seams', () => {
     await expect(
       emptyAdapter.invokeAction?.({ definition: plan.actions[0], value: {}, plan }, signal),
     ).resolves.toBeUndefined();
+    await expect(
+      emptyAdapter.validateValue?.(
+        {
+          plan,
+          value: {},
+          scope: { kind: 'form' },
+          trigger: 'submit',
+          locale: 'en-US',
+        },
+        signal,
+      ),
+    ).resolves.toEqual({ issues: [] });
   });
 });

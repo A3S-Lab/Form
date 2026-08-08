@@ -44,12 +44,12 @@ export function DifyLikeWorkflowNode(props: DifyLikeWorkflowNodeProps) {
   if (!pinned.ok)
     return <div role="alert">The node form no longer matches its pinned release.</div>;
 
-  const commit = async () => {
+  const commit = async (_actionId: string, validatedValue: JsonObject) => {
     const configuration = createWorkflowNodeConfiguration({
       nodeType: props.nodeType,
       nodeId: props.nodeId,
       form: props.form,
-      value: props.value,
+      value: validatedValue,
       locale: props.locale,
       readOnly: props.readOnly,
     });
